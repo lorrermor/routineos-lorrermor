@@ -1,0 +1,60 @@
+﻿<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoutineOS - Spesa extra</title>
+    <link rel="icon" type="image/x-icon" href="favicon-v2.ico">
+    <link rel="stylesheet" href="styles.css?v=routineos-visual-4">
+</head>
+<body>
+    <div class="app-shell">
+        <aside class="side-menu">
+            <a href="index.html">🏠 Dashboard</a>
+            <a href="routine.html">✅ Routine</a>
+            <a href="sottoroutine.html">🧩 Sottoroutine</a>
+            <a href="menu.html">🍽️ Menu</a>
+            <div class="side-divider"></div>
+            <div class="side-section sheets-side-section">
+                <div class="side-sheet-list" data-sheets-nav>
+                    <a href="fogli.html">📄 Foglio bianco</a>
+                </div>
+                <button class="side-add" type="button" onclick="quickAddSheet()" title="Aggiungi foglio">＋ Foglio</button>
+            </div>
+            <div class="side-divider"></div>
+            <a href="statistiche.html">📊 Statistiche</a>
+            <div class="side-divider"></div>
+            <a href="profile.html">👤 Profilo</a>
+            <button onclick="logout()">↪ Logout</button>
+        </aside>
+
+        <main class="container extra-shopping-page">
+            <header class="extra-shopping-hero">
+                <div>
+                    <h1>Spesa extra</h1>
+                    <p>Organizza gli acquisti fuori menu e manda in lista solo quello che vuoi davvero comprare.</p>
+                </div>
+                <div class="extra-hero-actions">
+                    <button class="btn outline" onclick="createExtraColumn()">Nuova colonna</button>
+                    <button class="btn primary" onclick="addExtraShoppingCard('da_comprare')">Aggiungi a Da comprare</button>
+                </div>
+            </header>
+
+            <section class="extra-board-wrap">
+                <div id="extra-shopping-board" class="extra-shopping-board"></div>
+            </section>
+        </main>
+    </div>
+    <script src="config.js?v=routineos-config-1"></script>
+
+    <script src="script.js?v=routineos-visual-4"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+

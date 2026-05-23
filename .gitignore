@@ -1,0 +1,10 @@
+pantrypro.local.env
+backups/
+backend/uvicorn.out.log
+backend/uvicorn.err.log
+__pycache__/
+*.pyc
+.venv/
+backend/__pycache__/
+*.log
+*.local

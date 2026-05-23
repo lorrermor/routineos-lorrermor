@@ -1,0 +1,107 @@
+﻿<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoutineOS - Fogli</title>
+    <link rel="icon" type="image/x-icon" href="favicon-v2.ico">
+    <link rel="stylesheet" href="styles.css?v=routineos-visual-4">
+    <style>
+        .sheets-layout { display:grid; grid-template-columns:300px minmax(0,1fr); gap:18px; align-items:start; }
+        .sheets-panel { position:sticky; top:20px; display:grid; gap:10px; }
+        .sheet-tree { display:grid; gap:6px; }
+        .sheet-tree-item { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:center; border:1px solid #334155; background:rgba(15,23,42,.42); border-radius:8px; padding:10px; }
+        .sheet-tree-item button { padding:7px 9px; }
+        .sheet-tree-item.active { border-color:var(--accent); background:rgba(59,130,246,.16); }
+        .sheet-tree-main { min-width:0; cursor:pointer; }
+        .sheet-tree-title { font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .sheet-tree-meta { color:var(--dim); font-size:.75rem; }
+        .sheet-child { margin-left:20px; }
+        .sheet-editor-head { display:grid; gap:14px; margin-bottom:20px; }
+        .sheet-title-input { font-size:1.8rem; font-weight:800; padding:15px 16px; border-color:#475569; background:rgba(15,23,42,.7); }
+        .sheet-toolbar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+        .sheet-body { width:100%; box-sizing:border-box; min-height:360px; resize:vertical; line-height:1.6; background:#0f172a; border:1px solid #334155; color:white; border-radius:8px; padding:14px; }
+        .sheet-body:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(59,130,246,.14); outline:none; }
+        .sheet-empty { border:1px dashed #475569; border-radius:10px; padding:28px; color:var(--dim); text-align:center; background:rgba(15,23,42,.28); }
+        .sheet-section-label { color:var(--accent); font-size:.82rem; font-weight:800; letter-spacing:1px; text-transform:uppercase; margin:4px 0 10px; }
+        .sheet-children-box { margin:0 0 20px; padding:14px; border:1px solid #334155; border-radius:10px; background:rgba(15,23,42,.28); }
+        @media (max-width:900px) {
+            .sheets-layout { grid-template-columns:1fr; }
+            .sheets-panel { position:static; }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-shell">
+        <aside class="side-menu">
+            <a href="index.html">🏠 Dashboard</a>
+            <a href="routine.html">✅ Routine</a>
+            <a href="sottoroutine.html">🧩 Sottoroutine</a>
+            <a href="menu.html">🍽️ Menu</a>
+            <div class="side-divider"></div>
+            <div class="side-section sheets-side-section">
+                <div class="side-sheet-list" data-sheets-nav>
+                    <a href="fogli.html">📄 Foglio bianco</a>
+                </div>
+                <button class="side-add" type="button" onclick="quickAddSheet()" title="Aggiungi foglio">＋ Foglio</button>
+            </div>
+            <div class="side-divider"></div>
+                        <a href="statistiche.html">📊 Statistiche</a>
+            <div class="side-divider"></div>
+            <a href="profile.html">👤 Profilo</a>
+            <button onclick="logout()">↪ Logout</button>
+        </aside>
+
+        <main class="container">
+            <header style="margin-bottom:30px; padding:10px 0;">
+                <h1 style="margin:0;">Fogli</h1>
+                <p style="color:var(--dim); margin:6px 0 0;">Organizza appunti, piani e sotto-fogli in uno spazio flessibile.</p>
+            </header>
+
+            <div class="sheets-layout">
+                <section class="card sheets-panel">
+                    <div style="display:flex; justify-content:space-between; gap:10px; align-items:center;">
+                        <h2 style="margin:0;">I tuoi fogli</h2>
+                        <button class="btn primary" onclick="createSheet()">+</button>
+                    </div>
+                    <div id="sheet-tree" class="sheet-tree"></div>
+                </section>
+
+                <section class="card">
+                    <div id="sheet-editor-empty" class="sheet-empty">
+                        Crea o seleziona un foglio per iniziare.
+                    </div>
+
+                    <div id="sheet-editor" style="display:none;">
+                        <div class="sheet-editor-head">
+                            <input id="sheet-title" class="sheet-title-input" placeholder="Titolo foglio">
+                            <div class="sheet-toolbar">
+                                <button class="btn primary" onclick="saveCurrentSheet()">Salva foglio</button>
+                                <button class="btn outline" onclick="createChildSheet()">Aggiungi sotto-foglio</button>
+                                <button class="btn danger" onclick="deleteCurrentSheet()">Elimina foglio</button>
+                                <span id="sheet-status" style="color:var(--dim);"></span>
+                            </div>
+                        </div>
+
+                        <div id="sheet-children" class="task-list" style="margin-bottom:18px;"></div>
+                        <div class="sheet-section-label">Corpo del foglio</div>
+                        <textarea id="sheet-body" class="sheet-body" placeholder="Scrivi qui il corpo del foglio..."></textarea>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+    <script src="config.js?v=routineos-config-1"></script>
+
+    <script src="script.js?v=routineos-visual-4"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+

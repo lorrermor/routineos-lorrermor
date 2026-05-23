@@ -1,0 +1,298 @@
+﻿<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoutineOS - Routine</title>
+    <link rel="icon" type="image/x-icon" href="favicon-v2.ico">
+    <link rel="stylesheet" href="styles.css?v=routineos-visual-4">
+    <link rel="stylesheet" href="routineos-ui.css?v=routineos-ui-1">
+</head>
+<body class="routineos-page routine-page">
+    <div class="app-shell">
+        <aside class="side-menu">
+            <a href="index.html">🏠 Dashboard</a>
+            <a class="active" href="routine.html">✅ Routine</a>
+            <a href="sottoroutine.html">🧩 Sottoroutine</a>
+            <a href="menu.html">🍽️ Menu</a>
+            <div class="side-divider" style="height:2px; background:linear-gradient(90deg, rgba(59,130,246,.08), rgba(148,163,184,.95), rgba(59,130,246,.08)); margin:16px 2px; border-radius:999px;"></div>
+            <div class="side-section sheets-side-section">
+                <div class="side-sheet-list" data-sheets-nav>
+                    <a href="fogli.html">📄 Foglio bianco</a>
+                </div>
+                <button class="side-add" type="button" onclick="quickAddSheet()" title="Aggiungi foglio">＋ Foglio</button>
+            </div>
+            <div class="side-divider" style="height:2px; background:linear-gradient(90deg, rgba(59,130,246,.08), rgba(148,163,184,.95), rgba(59,130,246,.08)); margin:16px 2px; border-radius:999px;"></div>
+                        <a href="statistiche.html">📊 Statistiche</a>
+            <div class="side-divider"></div>
+            <a href="profile.html">👤 Profilo</a>
+            <button onclick="logout()">↪ Logout</button>
+        </aside>
+
+        <main class="container">
+            <header style="display:flex; align-items:center; justify-content:space-between; margin-bottom:30px; padding:10px 0;">
+                <div>
+                    <h1 style="margin:0;">Routine</h1>
+                    <p style="color:var(--dim); margin:6px 0 0;">Imposta abitudini giornaliere, settimanali, mensili, annuali o personalizzate.</p>
+                </div>
+            </header>
+
+            <section class="card">
+                <div class="form-grid">
+                    <div>
+                        <label>Nome routine</label>
+                        <input id="routine-name" placeholder="Es: Mattina, Casa, Salute">
+                    </div>
+                    <div>
+                        <label>Frequenza</label>
+                        <select id="routine-frequency" onchange="toggleCustomFrequency()">
+                            <option value="giornaliera">Giornaliera</option>
+                            <option value="settimanale">Settimanale (domenica)</option>
+                            <option value="mensile">Mensile (fine mese)</option>
+                            <option value="annuale">Annuale (fine anno)</option>
+                            <option value="personalizzata">Personalizzata</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Data inizio</label>
+                        <input id="routine-start" type="date">
+                    </div>
+                    <div>
+                        <label>Data fine</label>
+                        <input id="routine-end" type="date">
+                    </div>
+                    <div id="custom-frequency-wrap" style="display:none;">
+                        <label>Ripeti ogni N giorni</label>
+                        <input id="routine-interval" type="number" min="1" value="7">
+                    </div>
+                </div>
+
+                <h3 style="margin-top:24px;">Attivita della routine</h3>
+                <div id="routine-items" class="editor-list"></div>
+                <div style="display:flex; gap:12px; margin-top:16px;">
+                    <button class="btn outline" onclick="addRoutineItem()">+ Aggiungi attivita</button>
+                    <button class="btn primary" onclick="saveRoutine()">Salva routine</button>
+                    <button class="btn outline" onclick="resetRoutineForm()">Nuova routine</button>
+                </div>
+                <div id="routine-status" style="margin-top:14px; color:var(--dim);"></div>
+            </section>
+
+            <section class="card">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px;">
+                    <h2 style="margin:0;">Routine salvate</h2>
+                    <button class="btn outline" onclick="loadRoutineList()">Aggiorna</button>
+                </div>
+                <div id="routine-list" class="task-list"></div>
+            </section>
+        </main>
+    </div>
+    <script src="config.js?v=routineos-config-1"></script>
+
+    <script src="script.js?v=routineos-visual-4"></script>
+    <script>
+        (function () {
+            function key() { return `pantrypro_sheets:${localStorage.getItem("pantrypro_user_id") || "local"}`; }
+            function read() { try { const v = JSON.parse(localStorage.getItem(key()) || "[]"); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
+            function save(v) { localStorage.setItem(key(), JSON.stringify(v)); }
+            function id() { return `sheet_${Date.now()}_${Math.random().toString(16).slice(2)}`; }
+            window.quickAddSheet = function () {
+                const title = prompt("Nome del nuovo foglio");
+                if (!title || !title.trim()) return;
+                const sheets = read();
+                const sheet = { id: id(), title: title.trim(), body: "", parentId: "", created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+                sheets.push(sheet); save(sheets);
+                window.location.href = `fogli.html?id=${encodeURIComponent(sheet.id)}`;
+            };
+            window.renderSheetsNav = function () {
+                const targets = document.querySelectorAll("[data-sheets-nav]");
+                if (!targets.length) return;
+                let sheets = read();
+                const html = sheets.filter(s => !s.parentId).map(s => `<a href="fogli.html?id=${encodeURIComponent(s.id)}">${String(s.title || "Foglio senza titolo").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;" }[c]))}</a>`).join("");
+                targets.forEach(t => { t.innerHTML = html || '<a href="fogli.html">📄 Foglio bianco</a>'; });
+            };
+            window.renderSheetsNav();
+            setTimeout(window.renderSheetsNav, 300);
+        })();
+    </script>
+    <script>
+        let routineItems = [];
+        let editingRoutineName = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            resetRoutineForm();
+            loadRoutineList();
+        });
+
+        function toggleCustomFrequency() {
+            const isCustom = document.getElementById('routine-frequency').value === 'personalizzata';
+            document.getElementById('custom-frequency-wrap').style.display = isCustom ? 'block' : 'none';
+        }
+
+        function addRoutineItem(value = '') {
+            const item = typeof value === 'object'
+                ? { id: value.id || `task_${Date.now()}_${routineItems.length}`, titolo: value.titolo || value.nome || '', orario: value.orario || '', note: value.note || '' }
+                : { id: `task_${Date.now()}_${routineItems.length}`, titolo: value, orario: '', note: '' };
+            routineItems.push(item);
+            renderRoutineItems();
+        }
+
+        function resetRoutineForm() {
+            const today = new Date().toISOString().split('T')[0];
+            editingRoutineName = null;
+            document.getElementById('routine-name').value = '';
+            document.getElementById('routine-frequency').value = 'giornaliera';
+            document.getElementById('routine-start').value = today;
+            document.getElementById('routine-end').value = '2099-12-31';
+            document.getElementById('routine-interval').value = '7';
+            document.getElementById('routine-status').textContent = '';
+            toggleCustomFrequency();
+            routineItems = [];
+            addRoutineItem();
+        }
+
+        function fillRoutineForm(routine) {
+            editingRoutineName = routine.nome;
+            document.getElementById('routine-name').value = routine.nome || '';
+            document.getElementById('routine-frequency').value = routine.frequenza || 'giornaliera';
+            document.getElementById('routine-start').value = routine.inizio || new Date().toISOString().split('T')[0];
+            document.getElementById('routine-end').value = routine.fine || '2099-12-31';
+            document.getElementById('routine-interval').value = routine.intervallo_giorni || '7';
+            toggleCustomFrequency();
+            routineItems = [];
+            (routine.elementi || []).forEach(addRoutineItem);
+            if (!routineItems.length) addRoutineItem();
+            document.getElementById('routine-status').textContent = `Stai modificando: ${routine.nome}`;
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        async function editRoutine(nomeEncoded) {
+            const nome = decodeURIComponent(nomeEncoded);
+            const res = await apiFetch(`${API}/routine/${encodeURIComponent(nome)}`);
+            if (!res.ok) {
+                document.getElementById('routine-status').textContent = 'Non riesco a caricare questa routine.';
+                return;
+            }
+            fillRoutineForm(await res.json());
+        }
+
+        async function deleteRoutine(nomeEncoded) {
+            const nome = decodeURIComponent(nomeEncoded);
+            if (!confirm(`Eliminare la routine "${nome}"?`)) return;
+            const res = await apiFetch(`${API}/routine/${encodeURIComponent(nome)}`, { method: 'DELETE' });
+            const status = document.getElementById('routine-status');
+            if (res.ok) {
+                status.textContent = 'Routine eliminata.';
+                if (editingRoutineName === nome) resetRoutineForm();
+                await loadRoutineList();
+            } else {
+                const data = await res.json();
+                status.textContent = data.detail || 'Errore eliminazione.';
+            }
+        }
+
+        function removeRoutineItem(index) {
+            routineItems.splice(index, 1);
+            renderRoutineItems();
+        }
+
+        function moveRoutineItem(from, to) {
+            if (from === to || from < 0 || to < 0) return;
+            const [item] = routineItems.splice(from, 1);
+            routineItems.splice(to, 0, item);
+            renderRoutineItems();
+        }
+
+        function startRoutineDrag(event, index) {
+            event.dataTransfer.setData('text/plain', String(index));
+            event.dataTransfer.effectAllowed = 'move';
+        }
+
+        function dropRoutineItem(event, index) {
+            event.preventDefault();
+            const from = parseInt(event.dataTransfer.getData('text/plain'), 10);
+            moveRoutineItem(from, index);
+        }
+
+        function renderRoutineItems() {
+            const container = document.getElementById('routine-items');
+            container.innerHTML = routineItems.map((item, index) => `
+                <div class="editor-row drag-drop-target" ondragover="event.preventDefault()" ondrop="dropRoutineItem(event, ${index})" style="grid-template-columns: 34px 110px minmax(0, 1fr) 42px;">
+                    <span class="drag-handle" draggable="true" ondragstart="startRoutineDrag(event, ${index})" title="Trascina">::</span>
+                    <input type="time" value="${escapeHTML(item.orario || '')}" onchange="routineItems[${index}].orario=this.value">
+                    <input value="${escapeHTML(item.titolo)}" placeholder="Es: bere acqua, meditazione, pulizia cucina" onchange="routineItems[${index}].titolo=this.value">
+                    <button class="btn danger" onclick="removeRoutineItem(${index})">X</button>
+                </div>
+            `).join('');
+        }
+
+        async function saveRoutine() {
+            const nome = document.getElementById('routine-name').value.trim();
+            const frequenza = document.getElementById('routine-frequency').value;
+            const inizio = document.getElementById('routine-start').value;
+            const fine = document.getElementById('routine-end').value;
+            const intervallo = parseInt(document.getElementById('routine-interval').value || '1', 10);
+            const status = document.getElementById('routine-status');
+
+            if (!nome || !inizio || !fine) {
+                status.textContent = 'Compila nome, data inizio e data fine.';
+                return;
+            }
+
+            const elementi = routineItems
+                .filter(item => item.titolo.trim())
+                .map((item, index) => ({ ...item, id: item.id || `task_${index}` }));
+
+            const routine = { nome, frequenza, inizio, fine, intervallo_giorni: intervallo, elementi };
+            const res = await apiFetch(`${API}/routine/save`, {
+                method: 'POST',
+                body: JSON.stringify({ filename: nome, original_filename: editingRoutineName, routine })
+            });
+
+            if (res.ok) {
+                status.textContent = 'Routine salvata.';
+                editingRoutineName = nome;
+                await loadRoutineList();
+            } else {
+                const data = await res.json();
+                status.textContent = data.detail || 'Errore salvataggio.';
+            }
+        }
+
+        async function loadRoutineList() {
+            const container = document.getElementById('routine-list');
+            const list = await (await apiFetch(`${API}/routine/list`)).json();
+            const details = await caricaDettagliDaLista('routine', list);
+            if (!details.length) {
+                container.innerHTML = '<p class="empty-state">Nessuna routine salvata.</p>';
+                return;
+            }
+            container.innerHTML = details.map(item => `
+                <div class="task-row" style="grid-template-columns:32px minmax(0, 1fr) auto;">
+                    <span></span>
+                    <span>
+                        <span class="task-title">${escapeHTML(item.nome)}</span>
+                        <span class="task-meta">${escapeHTML(item.frequenza)} - ${escapeHTML(item.inizio)} / ${escapeHTML(item.fine)}</span>
+                    </span>
+                    <span style="display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;">
+                        <button class="btn outline" onclick="editRoutine('${safeEncoded(item.nome)}')">Modifica</button>
+                        <button class="btn danger" onclick="deleteRoutine('${safeEncoded(item.nome)}')">Elimina</button>
+                    </span>
+                </div>
+            `).join('');
+        }
+    </script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+

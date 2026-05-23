@@ -1,0 +1,156 @@
+﻿<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoutineOS - Menu</title>
+    <link rel="icon" type="image/x-icon" href="favicon-v2.ico">
+    <link rel="stylesheet" href="styles.css?v=routineos-visual-4">
+    <style>
+        .shop-badge { background: var(--success); color: white; padding: 2px 10px; border-radius: 20px; font-size: 0.85rem; margin-left: 10px; font-weight: bold; }
+        .empty-state { text-align: center; padding: 34px; color: var(--dim); border: 2px dashed #334155; border-radius: 12px; background: rgba(255,255,255,0.02); }
+        #active-menu-display { display: flex; flex-direction: column; gap: 15px; min-height: 100px; }
+        .btn-check { background: rgba(16,185,129,0.1); color:#10b981; border:1px solid rgba(16,185,129,0.2); border-radius:50%; width:36px; height:36px; display:flex; align-items:center; justify-content:center; cursor:pointer; }
+    </style>
+    <link rel="stylesheet" href="routineos-ui.css?v=routineos-ui-1">
+</head>
+<body class="routineos-page menu-page">
+    <div class="app-shell">
+        <aside class="side-menu">
+            <a href="index.html">🏠 Dashboard</a>
+            <a href="routine.html">✅ Routine</a>
+            <a href="sottoroutine.html">🧩 Sottoroutine</a>
+            <a class="active" href="menu.html">🍽️ Menu</a>
+            <div class="side-divider" style="height:2px; background:linear-gradient(90deg, rgba(59,130,246,.08), rgba(148,163,184,.95), rgba(59,130,246,.08)); margin:16px 2px; border-radius:999px;"></div>
+            <div class="side-section sheets-side-section">
+                <div class="side-sheet-list" data-sheets-nav>
+                    <a href="fogli.html">📄 Foglio bianco</a>
+                </div>
+                <button class="side-add" type="button" onclick="quickAddSheet()" title="Aggiungi foglio">＋ Foglio</button>
+            </div>
+            <div class="side-divider" style="height:2px; background:linear-gradient(90deg, rgba(59,130,246,.08), rgba(148,163,184,.95), rgba(59,130,246,.08)); margin:16px 2px; border-radius:999px;"></div>
+                        <a href="statistiche.html">📊 Statistiche</a>
+            <div class="side-divider"></div>
+            <a href="profile.html">👤 Profilo</a>
+            <button onclick="logout()">↪ Logout</button>
+        </aside>
+
+        <main class="container">
+            <header style="margin-bottom:30px; padding:10px 0;">
+                <h1 style="margin:0;">Menu</h1>
+                <p style="color:var(--dim); margin:6px 0 0;">Dashboard del menu del giorno e lista della spesa.</p>
+            </header>
+
+            <section class="card" style="display:flex; gap:12px; flex-wrap:wrap;">
+                <button class="btn outline" onclick="window.location.href='inventario.html'">Apri inventario</button>
+                <button class="btn outline" onclick="window.location.href='planner.html'">Apri planner menu</button>
+                <button class="btn outline" onclick="window.location.href='spesa-extra.html'">Spesa extra</button>
+            </section>
+
+            <section class="card ai-menu-card">
+                <header class="ai-menu-head">
+                    <div>
+                        <h2>AI menu planner</h2>
+                        <p>Crea piani menu partendo da inventario, dieta, stagione, ingredienti preferiti o richieste libere.</p>
+                    </div>
+                    <span id="ai-menu-source" class="ai-menu-pill">Pronto</span>
+                </header>
+                <textarea id="ai-menu-request" class="ai-menu-textarea" rows="5" placeholder="Esempio: crea un piano settimanale mediterraneo, economico, con tante proteine, usando prima gli ingredienti gia presenti. Evita lattosio e proponi anche cosa comprare."></textarea>
+                <div class="ai-menu-controls">
+                    <label>
+                        Inizio
+                        <input id="ai-menu-start" type="date">
+                    </label>
+                    <label>
+                        Giorni
+                        <input id="ai-menu-days" type="number" min="1" max="31" value="7">
+                    </label>
+                    <label>
+                        Piani
+                        <input id="ai-menu-count" type="number" min="1" max="4" value="1">
+                    </label>
+                    <label class="ai-menu-check">
+                        <input id="ai-menu-use-inventory" type="checkbox" checked>
+                        Usa inventario
+                    </label>
+                    <button class="btn primary" onclick="generateAiMenuPlan()">Genera piano</button>
+                </div>
+                <div class="ai-menu-quick">
+                    <button class="btn outline" onclick="fillAiMenuPrompt('settimanale')">Settimanale sano</button>
+                    <button class="btn outline" onclick="fillAiMenuPrompt('mensile')">Mensile organizzato</button>
+                    <button class="btn outline" onclick="fillAiMenuPrompt('stagionale')">Stagionale</button>
+                    <button class="btn outline" onclick="fillAiMenuPrompt('vuoto')">Da inventario vuoto</button>
+                </div>
+                <div id="ai-menu-status" class="ai-menu-status"></div>
+                <div id="ai-menu-results" class="ai-menu-results"></div>
+            </section>
+
+            <section class="card" style="border-left:5px solid var(--accent);">
+                <header style="border-bottom:1px solid #334155; margin-bottom:20px; padding-bottom:15px;">
+                    <h2 style="margin:0;">Menu di oggi</h2>
+                </header>
+                <div id="active-menu-display">
+                    <p class="empty-state">Sto cercando il piano attivo...</p>
+                </div>
+            </section>
+
+            <section class="card" style="border-left:5px solid var(--success);">
+                <header style="margin-bottom:25px; display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <h2 style="margin:0;">Lista della spesa <span id="shop-count" class="shop-badge">0</span></h2>
+                        <p style="color:var(--dim); font-size:0.85rem; margin-top:5px;">Scorte mancanti basate sul fabbisogno del piano attivo.</p>
+                    </div>
+                    <button class="btn outline" onclick="window.print()">Stampa</button>
+                </header>
+                <ul id="shopping-list" style="list-style:none; padding:0; margin:0;"></ul>
+            </section>
+
+            <section class="card" style="background:#fff; border:1px solid var(--border); padding:0;">
+                <h3 style="font-size:0.75rem; text-transform:uppercase; color:var(--dim); margin:0; padding:15px; border-bottom:1px solid #1e293b;">Cronologia attivita</h3>
+                <div id="log-container" style="max-height:240px; overflow-y:auto; padding:5px;"></div>
+            </section>
+        </main>
+    </div>
+    <script src="config.js?v=routineos-config-1"></script>
+
+    <script src="script.js?v=routineos-visual-4"></script>
+    <script>
+        (function () {
+            function key() { return `pantrypro_sheets:${localStorage.getItem("pantrypro_user_id") || "local"}`; }
+            function read() { try { const v = JSON.parse(localStorage.getItem(key()) || "[]"); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
+            function save(v) { localStorage.setItem(key(), JSON.stringify(v)); }
+            function id() { return `sheet_${Date.now()}_${Math.random().toString(16).slice(2)}`; }
+            window.quickAddSheet = function () {
+                const title = prompt("Nome del nuovo foglio");
+                if (!title || !title.trim()) return;
+                const sheets = read();
+                const sheet = { id: id(), title: title.trim(), body: "", parentId: "", created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+                sheets.push(sheet); save(sheets);
+                window.location.href = `fogli.html?id=${encodeURIComponent(sheet.id)}`;
+            };
+            window.renderSheetsNav = function () {
+                const targets = document.querySelectorAll("[data-sheets-nav]");
+                if (!targets.length) return;
+                let sheets = read();
+                const html = sheets.filter(s => !s.parentId).map(s => `<a href="fogli.html?id=${encodeURIComponent(s.id)}">${String(s.title || "Foglio senza titolo").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;" }[c]))}</a>`).join("");
+                targets.forEach(t => { t.innerHTML = html || '<a href="fogli.html">📄 Foglio bianco</a>'; });
+            };
+            window.renderSheetsNav();
+            setTimeout(window.renderSheetsNav, 300);
+        })();
+    </script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+

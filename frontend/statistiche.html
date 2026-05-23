@@ -1,0 +1,114 @@
+﻿<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoutineOS - Statistiche</title>
+    <link rel="icon" type="image/x-icon" href="favicon-v2.ico">
+    <link rel="stylesheet" href="styles.css?v=routineos-visual-4">
+    <link rel="stylesheet" href="routineos-ui.css?v=routineos-ui-1">
+</head>
+<body class="routineos-page stats-page">
+    <div class="app-shell">
+        <aside class="side-menu">
+            <a href="index.html">🏠 Dashboard</a>
+            <a href="routine.html">✅ Routine</a>
+            <a href="sottoroutine.html">🧩 Sottoroutine</a>
+            <a href="menu.html">🍽️ Menu</a>
+            <div class="side-divider"></div>
+            <div class="side-section sheets-side-section">
+                <div class="side-sheet-list" data-sheets-nav>
+                    <a href="fogli.html">📄 Foglio bianco</a>
+                </div>
+                <button class="side-add" type="button" onclick="quickAddSheet()" title="Aggiungi foglio">＋ Foglio</button>
+            </div>
+            <div class="side-divider"></div>
+            <a class="active" href="statistiche.html">📊 Statistiche</a>
+            <div class="side-divider"></div>
+            <a href="profile.html">👤 Profilo</a>
+            <button onclick="logout()">↪ Logout</button>
+        </aside>
+
+        <main class="container">
+            <header style="margin-bottom:30px; padding:10px 0;">
+                <h1 style="margin:0;">Statistiche</h1>
+                <p style="color:var(--dim); margin:6px 0 0;">Controlla continuità, salti e giustificazioni delle routine.</p>
+                <button class="btn danger" style="margin-top:14px; width:auto;" onclick="clearStats()">Azzera statistiche</button>
+            </header>
+
+            <section class="stats-summary-grid">
+                <article class="card stat-metric">
+                    <span>Completate</span>
+                    <strong id="stat-completed">0</strong>
+                </article>
+                <article class="card stat-metric">
+                    <span>Giustificate</span>
+                    <strong id="stat-justified">0</strong>
+                </article>
+                <article class="card stat-metric">
+                    <span>Saltate</span>
+                    <strong id="stat-missed">0</strong>
+                </article>
+                <article class="card stat-metric">
+                    <span>Costanza</span>
+                    <strong id="stat-rate">0%</strong>
+                </article>
+            </section>
+
+            <section class="card">
+                <header class="stats-section-head">
+                    <div>
+                        <h2>Giustificazioni preimpostate</h2>
+                        <p>Usale quando salti una routine, cosi la statistica distingue un salto reale da un'assenza motivata.</p>
+                    </div>
+                    <button class="btn primary" onclick="addJustification()">Aggiungi</button>
+                </header>
+                <div id="justifications-list" class="justification-list"></div>
+            </section>
+
+            <section class="card">
+                <header class="stats-section-head">
+                    <div>
+                        <h2>Grafici attivita</h2>
+                        <p>Ogni attivita mostra completate, giustificate e saltate.</p>
+                    </div>
+                </header>
+                <div id="activity-charts" class="activity-charts"></div>
+            </section>
+
+            <section class="card">
+                <header class="stats-section-head">
+                    <div>
+                        <h2>Calendario</h2>
+                        <p>Verde: completata. Giallo: giustificata. Rosso: saltata.</p>
+                    </div>
+                    <input id="stats-month" type="month" onchange="renderStatsPage()" style="max-width:180px;">
+                </header>
+                <div id="stats-calendar" class="stats-calendar"></div>
+            </section>
+        </main>
+    </div>
+    <script src="config.js?v=routineos-config-1"></script>
+
+    <script src="script.js?v=routineos-visual-4"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const month = document.getElementById('stats-month');
+            if (month) month.value = new Date().toISOString().slice(0, 7);
+            renderStatsPage();
+        });
+    </script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+

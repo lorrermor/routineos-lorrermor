@@ -1,0 +1,671 @@
+﻿<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoutineOS - Accedi</title>
+    <link rel="icon" type="image/x-icon" href="favicon-v2.ico">
+    <link rel="manifest" href="manifest.json">
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --accent: #3b82f6;
+            --accent-rgb: 59, 130, 246;
+            --text: #f8fafc;
+            --dim: #94a3b8;
+            --danger: #ef4444;
+            --success: #10b981;
+            --border: #334155;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Segoe UI', Roboto, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Sfondo animato */
+        body::before {
+            content: '';
+            position: fixed;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(ellipse at 20% 50%, rgba(59,130,246,0.07) 0%, transparent 50%),
+                        radial-gradient(ellipse at 80% 20%, rgba(16,185,129,0.05) 0%, transparent 50%);
+            animation: bgShift 10s ease-in-out infinite alternate;
+            pointer-events: none;
+        }
+
+        @keyframes bgShift {
+            from { transform: translateX(0) translateY(0); }
+            to   { transform: translateX(2%) translateY(2%); }
+        }
+
+        .login-container {
+            width: 100%;
+            max-width: 420px;
+            animation: fadeInUp 0.5s ease;
+            position: relative;
+            z-index: 1;
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Logo / Header */
+        .login-header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .login-logo {
+            font-size: 3rem;
+            margin-bottom: 8px;
+        }
+
+        .login-title {
+            font-size: 2rem;
+            font-weight: 800;
+            color: var(--accent);
+            letter-spacing: -1px;
+        }
+
+        .login-subtitle {
+            color: var(--dim);
+            font-size: 0.9rem;
+            margin-top: 6px;
+        }
+
+        /* Card */
+        .card {
+            background: var(--card);
+            border-radius: 20px;
+            padding: 32px;
+            border: 1px solid rgba(255,255,255,0.06);
+            box-shadow: 0 25px 50px rgba(0,0,0,0.4);
+        }
+
+        /* Tabs Login / Registrati */
+        .tabs {
+            display: flex;
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+            padding: 4px;
+            margin-bottom: 28px;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--dim);
+            transition: all 0.2s;
+            border: none;
+            background: transparent;
+        }
+
+        .tab.active {
+            background: var(--accent);
+            color: white;
+            box-shadow: 0 4px 12px rgba(59,130,246,0.3);
+        }
+
+        /* Form */
+        .form-group {
+            margin-bottom: 18px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--dim);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+        }
+
+        .form-input {
+            width: 100%;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 14px 16px;
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: all 0.2s;
+            outline: none;
+        }
+
+        .form-input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+        }
+
+        .form-input::placeholder { color: var(--border); }
+
+        /* Bottone submit */
+        .btn-submit {
+            width: 100%;
+            padding: 16px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 8px;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-submit:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(59,130,246,0.4);
+            filter: brightness(1.1);
+        }
+
+        .btn-submit:active { transform: translateY(0); }
+
+        .btn-submit:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Messaggi errore / successo */
+        .message {
+            padding: 14px 16px;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            margin-top: 16px;
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-5px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.error {
+            background: rgba(239,68,68,0.1);
+            border: 1px solid rgba(239,68,68,0.3);
+            color: #fca5a5;
+            display: block;
+        }
+
+        .message.success {
+            background: rgba(16,185,129,0.1);
+            border: 1px solid rgba(16,185,129,0.3);
+            color: #6ee7b7;
+            display: block;
+        }
+
+        /* Loading spinner */
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Footer */
+        .login-footer {
+            text-align: center;
+            margin-top: 24px;
+            color: var(--dim);
+            font-size: 0.8rem;
+        }
+
+        .remember-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin: -4px 0 14px;
+            color: var(--dim);
+            font-size: 0.88rem;
+        }
+
+        .remember-row label {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+
+        .remember-row input {
+            width: 17px;
+            height: 17px;
+            accent-color: var(--accent);
+        }
+
+        /* RoutineOS visual refresh */
+        :root {
+            --bg: #f6f8fb;
+            --card: #ffffff;
+            --accent: #2563eb;
+            --accent-rgb: 37, 99, 235;
+            --text: #111827;
+            --dim: #64748b;
+            --danger: #dc2626;
+            --success: #059669;
+            --border: #dbe3ef;
+        }
+
+        body {
+            background: linear-gradient(180deg, #ffffff 0, #f6f8fb 100%);
+            color: var(--text);
+            letter-spacing: 0;
+        }
+
+        body::before {
+            inset: 0;
+            width: auto;
+            height: auto;
+            top: 0;
+            left: 0;
+            background:
+                linear-gradient(120deg, rgba(37,99,235,0.08), transparent 36%),
+                linear-gradient(300deg, rgba(219,39,119,0.07), transparent 42%),
+                radial-gradient(circle at 78% 22%, rgba(5,150,105,0.08), transparent 30%);
+            animation: none;
+            z-index: 0;
+        }
+
+        .login-logo {
+            width: 64px;
+            height: 64px;
+            border-radius: 18px;
+            margin: 0 auto 12px;
+            display: grid;
+            place-items: center;
+            background: #111827;
+            color: #ffffff;
+            font-size: 1.45rem;
+            font-weight: 850;
+            box-shadow: 0 16px 36px rgba(15,23,42,0.18);
+        }
+
+        .login-container {
+            opacity: 1 !important;
+            transform: none !important;
+            animation: none !important;
+        }
+
+        .login-title {
+            color: #111827;
+            letter-spacing: 0;
+        }
+
+        .card {
+            background: #ffffff;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-shadow: 0 24px 60px rgba(15,23,42,0.12);
+        }
+
+        .tabs {
+            background: #f1f5f9;
+            border-radius: 8px;
+        }
+
+        .tab {
+            border-radius: 8px;
+        }
+
+        .tab.active {
+            background: var(--accent);
+            box-shadow: 0 8px 18px rgba(37,99,235,0.22);
+        }
+
+        .form-input {
+            background: #ffffff;
+            border-color: var(--border);
+            color: var(--text);
+            border-radius: 8px;
+        }
+
+        .form-input:focus {
+            box-shadow: 0 0 0 4px rgba(37,99,235,0.12);
+        }
+
+        .form-input::placeholder {
+            color: #94a3b8;
+        }
+
+        .btn-submit {
+            border-radius: 8px;
+            letter-spacing: 0;
+        }
+
+        .btn-submit:hover {
+            box-shadow: 0 14px 28px rgba(37,99,235,0.22);
+            filter: none;
+        }
+
+        .message.error {
+            background: #fef2f2;
+            border-color: #fecaca;
+            color: #b91c1c;
+        }
+
+        .message.success {
+            background: #ecfdf5;
+            border-color: #a7f3d0;
+            color: #047857;
+        }
+    </style>
+</head>
+<body>
+
+<div class="login-container">
+
+    <div class="login-header">
+        <div class="login-logo">RO</div>
+        <div class="login-title">RoutineOS</div>
+        <div class="login-subtitle">Routine, menu, fogli e giornate sotto controllo</div>
+    </div>
+
+    <div class="card">
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab active" id="tab-login" onclick="switchTab('login')">🚀 Accedi</button>
+            <button class="tab" id="tab-register" onclick="switchTab('register')">✨ Registrati</button>
+        </div>
+
+        <!-- Form Login -->
+        <div id="form-login">
+            <div class="form-group">
+                <label class="form-label">Email</label>
+                <input type="email" id="login-email" class="form-input" placeholder="tua@email.com" autocomplete="email">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Password</label>
+                <input type="password" id="login-password" class="form-input" placeholder="Password" autocomplete="current-password">
+            </div>
+            <div class="remember-row">
+                <label><input type="checkbox" id="remember-me" checked> Ricordati di me</label>
+            </div>
+            <button class="btn-submit" id="btn-login" onclick="doLogin()">🚀 Accedi</button>
+            <button class="tab" style="width:100%; margin-top:12px;" onclick="resetPassword()">Password dimenticata?</button>
+            <div id="msg-login" class="message"></div>
+        </div>
+
+        <!-- Form Registrazione -->
+        <div id="form-register" style="display:none;">
+            <div class="form-group">
+                <label class="form-label">Email</label>
+                <input type="email" id="reg-email" class="form-input" placeholder="tua@email.com" autocomplete="email">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Password</label>
+                <input type="password" id="reg-password" class="form-input" placeholder="Minimo 6 caratteri" autocomplete="new-password">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Conferma Password</label>
+                <input type="password" id="reg-confirm" class="form-input" placeholder="Ripeti la password" autocomplete="new-password">
+            </div>
+            <button class="btn-submit" id="btn-register" onclick="doRegister()">✨ Crea account</button>
+            <div id="msg-register" class="message"></div>
+        </div>
+
+    </div>
+
+    <div class="login-footer">
+        RoutineOS - I tuoi dati sono privati e sicuri
+    </div>
+
+</div>
+
+<script src="config.js?v=routineos-config-1"></script>
+<script>
+    // -------------------------------------------------------
+    // CONFIGURAZIONE
+    // -------------------------------------------------------
+    const API = localStorage.getItem("pantrypro_api") || (window.ROUTINEOS_CONFIG && window.ROUTINEOS_CONFIG.API_URL) || (location.hostname === "localhost" || location.hostname === "127.0.0.1" ? "http://localhost:8765" : "")
+
+    // -------------------------------------------------------
+    // Se l'utente e gia loggato, vai direttamente alla dashboard
+    // -------------------------------------------------------
+    window.addEventListener('DOMContentLoaded', () => {
+        const token = localStorage.getItem('pantrypro_token') || sessionStorage.getItem('pantrypro_token');
+        if (token) {
+            window.location.href = 'index.html';
+        }
+        const remember = localStorage.getItem('pantrypro_remember_me');
+        document.getElementById('remember-me').checked = remember !== '0';
+
+        // Enter key per submit
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const activeTab = document.getElementById('form-login').style.display !== 'none'
+                    ? 'login' : 'register';
+                if (activeTab === 'login') doLogin();
+                else doRegister();
+            }
+        });
+    });
+
+    // -------------------------------------------------------
+    // SWITCH TAB
+    // -------------------------------------------------------
+    function switchTab(tab) {
+        const isLogin = tab === 'login';
+        document.getElementById('form-login').style.display    = isLogin ? 'block' : 'none';
+        document.getElementById('form-register').style.display = isLogin ? 'none'  : 'block';
+        document.getElementById('tab-login').classList.toggle('active', isLogin);
+        document.getElementById('tab-register').classList.toggle('active', !isLogin);
+        clearMessages();
+    }
+
+    function clearMessages() {
+        ['msg-login', 'msg-register'].forEach(id => {
+            const el = document.getElementById(id);
+            el.className = 'message';
+            el.textContent = '';
+        });
+    }
+
+    function showMessage(id, text, type) {
+        const el = document.getElementById(id);
+        el.textContent = formatAuthMessage(text);
+        el.className = `message ${type}`;
+    }
+
+    function formatAuthMessage(text) {
+        const raw = String(text || '');
+        const message = raw.toLowerCase();
+
+        if (message.includes('email rate limit exceeded') || message.includes('rate limit')) {
+            return "Hai fatto troppi tentativi in poco tempo. Aspetta qualche minuto e riprova.";
+        }
+
+        if (message.includes('already registered') || message.includes('user already registered') || message.includes('already exists')) {
+            return "Questa email sembra gia registrata. Prova ad accedere invece di creare un nuovo account.";
+        }
+
+        if (message.includes('redirect') || message.includes('not allowed')) {
+            return "Il link di recupero non e ancora consentito da Supabase. Aggiungi il Redirect URL dell'app nelle impostazioni Auth.";
+        }
+
+        return raw;
+    }
+
+    function setLoading(btnId, loading, defaultText) {
+        const btn = document.getElementById(btnId);
+        btn.disabled = loading;
+        btn.innerHTML = loading
+            ? `<span class="spinner"></span> Attendere...`
+            : defaultText;
+    }
+
+    // -------------------------------------------------------
+    // LOGIN
+    // -------------------------------------------------------
+    async function doLogin() {
+        const email    = document.getElementById('login-email').value.trim();
+        const password = document.getElementById('login-password').value;
+        const remember = document.getElementById('remember-me').checked;
+
+        if (!email || !password) {
+            showMessage('msg-login', 'Inserisci email e password.', 'error');
+            return;
+        }
+
+        setLoading('btn-login', true, 'Accedi');
+
+        try {
+            const res = await fetch(`${API}/auth/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
+            });
+
+            const data = await res.json();
+
+            if (res.ok && data.status === 'success') {
+                const storage = remember ? localStorage : sessionStorage;
+                const other = remember ? sessionStorage : localStorage;
+                ['pantrypro_token', 'pantrypro_refresh', 'pantrypro_user_id', 'pantrypro_email'].forEach(key => other.removeItem(key));
+                storage.setItem('pantrypro_token', data.access_token);
+                storage.setItem('pantrypro_refresh', data.refresh_token);
+                storage.setItem('pantrypro_user_id', data.user_id);
+                storage.setItem('pantrypro_email', data.email);
+                localStorage.setItem('pantrypro_remember_me', remember ? '1' : '0');
+
+                showMessage('msg-login', 'Accesso effettuato. Reindirizzamento...', 'success');
+                setTimeout(() => window.location.href = 'index.html', 800);
+            } else {
+                showMessage('msg-login', data.detail || 'Credenziali non valide.', 'error');
+            }
+        } catch (e) {
+            showMessage('msg-login', 'Errore di connessione al server.', 'error');
+        } finally {
+            setLoading('btn-login', false, 'Accedi');
+        }
+    }
+
+    // -------------------------------------------------------
+    // REGISTRAZIONE
+    // -------------------------------------------------------
+    async function doRegister() {
+        const email    = document.getElementById('reg-email').value.trim();
+        const password = document.getElementById('reg-password').value;
+        const confirm  = document.getElementById('reg-confirm').value;
+
+        if (!email || !password || !confirm) {
+            showMessage('msg-register', 'Compila tutti i campi.', 'error');
+            return;
+        }
+
+        if (password.length < 6) {
+            showMessage('msg-register', 'La password deve avere almeno 6 caratteri.', 'error');
+            return;
+        }
+
+        if (password !== confirm) {
+            showMessage('msg-register', 'Le password non coincidono.', 'error');
+            return;
+        }
+
+        setLoading('btn-register', true, 'Crea Account');
+
+        try {
+            const res = await fetch(`${API}/auth/register`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
+            });
+
+            const data = await res.json();
+
+            if (res.ok && data.status === 'success') {
+                showMessage('msg-register',
+                    'Account creato. Controlla la tua email per confermare, poi accedi.',
+                    'success'
+                );
+                setTimeout(() => switchTab('login'), 2500);
+            } else {
+                showMessage('msg-register', data.detail || 'Errore durante la registrazione.', 'error');
+            }
+        } catch (e) {
+            showMessage('msg-register', 'Errore di connessione al server.', 'error');
+        } finally {
+            setLoading('btn-register', false, 'Crea Account');
+        }
+    }
+
+    async function resetPassword() {
+        const email = document.getElementById('login-email').value.trim();
+
+        if (!email) {
+            showMessage('msg-login', 'Inserisci prima la tua email, poi premi Password dimenticata.', 'error');
+            return;
+        }
+
+        try {
+            const res = await fetch(`${API}/auth/reset-password`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email,
+                    redirect_to: `${window.location.origin}/reset-password.html`
+                })
+            });
+
+            const data = await res.json();
+
+            if (res.ok && data.status === 'success') {
+                showMessage('msg-login', data.message || 'Email inviata. Controlla la posta e segui il link per scegliere una nuova password.', 'success');
+            } else {
+                showMessage('msg-login', 'Errore: ' + (data.detail || 'Impossibile inviare email di reset.'), 'error');
+            }
+        } catch (e) {
+            showMessage('msg-login', 'Errore di connessione al server.', 'error');
+        }
+    }
+</script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+

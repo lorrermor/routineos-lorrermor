@@ -1,0 +1,338 @@
+﻿<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoutineOS - Sottoroutine</title>
+    <link rel="icon" type="image/x-icon" href="favicon-v2.ico">
+    <link rel="stylesheet" href="styles.css?v=routineos-visual-4">
+    <link rel="stylesheet" href="routineos-ui.css?v=routineos-ui-1">
+</head>
+<body class="routineos-page subroutine-page">
+    <div class="app-shell">
+        <aside class="side-menu">
+            <a href="index.html">🏠 Dashboard</a>
+            <a href="routine.html">✅ Routine</a>
+            <a class="active" href="sottoroutine.html">🧩 Sottoroutine</a>
+            <a href="menu.html">🍽️ Menu</a>
+            <div class="side-divider" style="height:2px; background:linear-gradient(90deg, rgba(59,130,246,.08), rgba(148,163,184,.95), rgba(59,130,246,.08)); margin:16px 2px; border-radius:999px;"></div>
+            <div class="side-section sheets-side-section">
+                <div class="side-sheet-list" data-sheets-nav>
+                    <a href="fogli.html">📄 Foglio bianco</a>
+                </div>
+                <button class="side-add" type="button" onclick="quickAddSheet()" title="Aggiungi foglio">＋ Foglio</button>
+            </div>
+            <div class="side-divider" style="height:2px; background:linear-gradient(90deg, rgba(59,130,246,.08), rgba(148,163,184,.95), rgba(59,130,246,.08)); margin:16px 2px; border-radius:999px;"></div>
+                        <a href="statistiche.html">📊 Statistiche</a>
+            <div class="side-divider"></div>
+            <a href="profile.html">👤 Profilo</a>
+            <button onclick="logout()">↪ Logout</button>
+        </aside>
+
+        <main class="container">
+            <header style="display:flex; align-items:center; justify-content:space-between; margin-bottom:30px; padding:10px 0;">
+                <div>
+                    <h1 style="margin:0;">Sottoroutine</h1>
+                    <p style="color:var(--dim); margin:6px 0 0;">Crea routine piu specifiche collegate a una routine principale, ad esempio allenamento.</p>
+                </div>
+            </header>
+
+            <section class="card">
+                <div class="form-grid">
+                    <div>
+                        <label>Nome sottoroutine</label>
+                        <input id="sub-name" placeholder="Es: Allenamento gambe">
+                    </div>
+                    <div>
+                        <label>Routine principale</label>
+                        <select id="sub-parent"></select>
+                    </div>
+                    <div>
+                        <label>Frequenza</label>
+                        <select id="sub-frequency" onchange="toggleSubCustomFrequency()">
+                            <option value="giornaliera">Giornaliera</option>
+                            <option value="settimanale">Settimanale (domenica)</option>
+                            <option value="mensile">Mensile (fine mese)</option>
+                            <option value="annuale">Annuale (fine anno)</option>
+                            <option value="personalizzata">Personalizzata</option>
+                        </select>
+                    </div>
+                    <div id="sub-custom-frequency-wrap" style="display:none;">
+                        <label>Ripeti ogni N giorni</label>
+                        <input id="sub-interval" type="number" min="1" value="7">
+                    </div>
+                    <div>
+                        <label>Data inizio</label>
+                        <input id="sub-start" type="date">
+                    </div>
+                    <div>
+                        <label>Data fine</label>
+                        <input id="sub-end" type="date">
+                    </div>
+                </div>
+
+                <h3 style="margin-top:24px;">Attivita della sottoroutine</h3>
+                <div id="sub-items" class="editor-list"></div>
+                <div style="display:flex; gap:12px; margin-top:16px;">
+                    <button class="btn outline" onclick="addSubItem()">+ Aggiungi attivita</button>
+                    <button class="btn primary" onclick="saveSubroutine()">Salva sottoroutine</button>
+                    <button class="btn outline" onclick="resetSubForm()">Nuova sottoroutine</button>
+                </div>
+                <div id="sub-status" style="margin-top:14px; color:var(--dim);"></div>
+            </section>
+
+            <section class="card">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px;">
+                    <h2 style="margin:0;">Sottoroutine salvate</h2>
+                    <button class="btn outline" onclick="loadSubList()">Aggiorna</button>
+                </div>
+                <div id="sub-list" class="task-list"></div>
+            </section>
+        </main>
+    </div>
+    <script src="config.js?v=routineos-config-1"></script>
+
+    <script src="script.js?v=routineos-visual-4"></script>
+    <script>
+        (function () {
+            function key() { return `pantrypro_sheets:${localStorage.getItem("pantrypro_user_id") || "local"}`; }
+            function read() { try { const v = JSON.parse(localStorage.getItem(key()) || "[]"); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
+            function save(v) { localStorage.setItem(key(), JSON.stringify(v)); }
+            function id() { return `sheet_${Date.now()}_${Math.random().toString(16).slice(2)}`; }
+            window.quickAddSheet = function () {
+                const title = prompt("Nome del nuovo foglio");
+                if (!title || !title.trim()) return;
+                const sheets = read();
+                const sheet = { id: id(), title: title.trim(), body: "", parentId: "", created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+                sheets.push(sheet); save(sheets);
+                window.location.href = `fogli.html?id=${encodeURIComponent(sheet.id)}`;
+            };
+            window.renderSheetsNav = function () {
+                const targets = document.querySelectorAll("[data-sheets-nav]");
+                if (!targets.length) return;
+                let sheets = read();
+                const html = sheets.filter(s => !s.parentId).map(s => `<a href="fogli.html?id=${encodeURIComponent(s.id)}">${String(s.title || "Foglio senza titolo").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;" }[c]))}</a>`).join("");
+                targets.forEach(t => { t.innerHTML = html || '<a href="fogli.html">📄 Foglio bianco</a>'; });
+            };
+            window.renderSheetsNav();
+            setTimeout(window.renderSheetsNav, 300);
+        })();
+    </script>
+    <script>
+        let subItems = [];
+        let editingSubName = null;
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadParents();
+            resetSubForm();
+            await loadSubList();
+            const editName = new URLSearchParams(window.location.search).get('edit');
+            if (editName) {
+                await editSubroutine(encodeURIComponent(editName));
+            }
+        });
+
+        function toggleSubCustomFrequency() {
+            const isCustom = document.getElementById('sub-frequency').value === 'personalizzata';
+            document.getElementById('sub-custom-frequency-wrap').style.display = isCustom ? 'block' : 'none';
+        }
+
+        async function loadParents() {
+            const select = document.getElementById('sub-parent');
+            const list = await (await apiFetch(`${API}/routine/list`)).json();
+            if (!list.length) {
+                select.innerHTML = '<option value="">Nessuna routine principale</option>';
+                return;
+            }
+            select.innerHTML = list.map(item => {
+                const nome = typeof item === 'string' ? item : item.nome;
+                return `<option value="${escapeHTML(nome)}">${escapeHTML(nome)}</option>`;
+            }).join('');
+        }
+
+        function addSubItem(value = '') {
+            const item = typeof value === 'object'
+                ? {
+                    id: value.id || `task_${Date.now()}_${subItems.length}`,
+                    titolo: value.titolo || value.nome || '',
+                    orario: value.orario || '',
+                    giorno_settimana: value.giorno_settimana || '',
+                    note: value.note || ''
+                }
+                : { id: `task_${Date.now()}_${subItems.length}`, titolo: value, orario: '', giorno_settimana: '', note: '' };
+            subItems.push(item);
+            renderSubItems();
+        }
+
+        function resetSubForm() {
+            const today = new Date().toISOString().split('T')[0];
+            editingSubName = null;
+            document.getElementById('sub-name').value = '';
+            document.getElementById('sub-frequency').value = 'giornaliera';
+            document.getElementById('sub-start').value = today;
+            document.getElementById('sub-end').value = '2099-12-31';
+            document.getElementById('sub-interval').value = '7';
+            document.getElementById('sub-status').textContent = '';
+            toggleSubCustomFrequency();
+            subItems = [];
+            addSubItem();
+        }
+
+        function fillSubForm(sottoroutine) {
+            editingSubName = sottoroutine.nome;
+            document.getElementById('sub-name').value = sottoroutine.nome || '';
+            document.getElementById('sub-parent').value = sottoroutine.routine_parent || '';
+            document.getElementById('sub-frequency').value = sottoroutine.frequenza || 'giornaliera';
+            document.getElementById('sub-start').value = sottoroutine.inizio || new Date().toISOString().split('T')[0];
+            document.getElementById('sub-end').value = sottoroutine.fine || '2099-12-31';
+            document.getElementById('sub-interval').value = sottoroutine.intervallo_giorni || '7';
+            toggleSubCustomFrequency();
+            subItems = [];
+            (sottoroutine.elementi || []).forEach(addSubItem);
+            if (!subItems.length) addSubItem();
+            document.getElementById('sub-status').textContent = `Stai modificando: ${sottoroutine.nome}`;
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        async function editSubroutine(nomeEncoded) {
+            const nome = decodeURIComponent(nomeEncoded);
+            const res = await apiFetch(`${API}/sottoroutine/${encodeURIComponent(nome)}`);
+            if (!res.ok) {
+                document.getElementById('sub-status').textContent = 'Non riesco a caricare questa sottoroutine.';
+                return;
+            }
+            fillSubForm(await res.json());
+        }
+
+        async function deleteSubroutine(nomeEncoded) {
+            const nome = decodeURIComponent(nomeEncoded);
+            if (!confirm(`Eliminare la sottoroutine "${nome}"?`)) return;
+            const res = await apiFetch(`${API}/sottoroutine/${encodeURIComponent(nome)}`, { method: 'DELETE' });
+            const status = document.getElementById('sub-status');
+            if (res.ok) {
+                status.textContent = 'Sottoroutine eliminata.';
+                if (editingSubName === nome) resetSubForm();
+                await loadSubList();
+            } else {
+                const data = await res.json();
+                status.textContent = data.detail || 'Errore eliminazione.';
+            }
+        }
+
+        function removeSubItem(index) {
+            subItems.splice(index, 1);
+            renderSubItems();
+        }
+
+        function moveSubItem(from, to) {
+            if (from === to || from < 0 || to < 0) return;
+            const [item] = subItems.splice(from, 1);
+            subItems.splice(to, 0, item);
+            renderSubItems();
+        }
+
+        function startSubDrag(event, index) {
+            event.dataTransfer.setData('text/plain', String(index));
+            event.dataTransfer.effectAllowed = 'move';
+        }
+
+        function dropSubItem(event, index) {
+            event.preventDefault();
+            const from = parseInt(event.dataTransfer.getData('text/plain'), 10);
+            moveSubItem(from, index);
+        }
+
+        function renderSubItems() {
+            const container = document.getElementById('sub-items');
+            container.innerHTML = subItems.map((item, index) => `
+                <div class="editor-row drag-drop-target" ondragover="event.preventDefault()" ondrop="dropSubItem(event, ${index})" style="grid-template-columns: 34px 110px minmax(0, 1fr) 180px 42px;">
+                    <span class="drag-handle" draggable="true" ondragstart="startSubDrag(event, ${index})" title="Trascina">::</span>
+                    <input type="time" value="${escapeHTML(item.orario || '')}" onchange="subItems[${index}].orario=this.value">
+                    <input value="${escapeHTML(item.titolo)}" placeholder="Es: squat, stretching, serie addominali" onchange="subItems[${index}].titolo=this.value">
+                    <select onchange="subItems[${index}].giorno_settimana=this.value">
+                        <option value="" ${item.giorno_settimana === '' ? 'selected' : ''}>Ogni giorno dovuto</option>
+                        <option value="1" ${item.giorno_settimana === '1' ? 'selected' : ''}>Lunedi</option>
+                        <option value="2" ${item.giorno_settimana === '2' ? 'selected' : ''}>Martedi</option>
+                        <option value="3" ${item.giorno_settimana === '3' ? 'selected' : ''}>Mercoledi</option>
+                        <option value="4" ${item.giorno_settimana === '4' ? 'selected' : ''}>Giovedi</option>
+                        <option value="5" ${item.giorno_settimana === '5' ? 'selected' : ''}>Venerdi</option>
+                        <option value="6" ${item.giorno_settimana === '6' ? 'selected' : ''}>Sabato</option>
+                        <option value="0" ${item.giorno_settimana === '0' ? 'selected' : ''}>Domenica</option>
+                    </select>
+                    <button class="btn danger" onclick="removeSubItem(${index})">X</button>
+                </div>
+            `).join('');
+        }
+
+        async function saveSubroutine() {
+            const nome = document.getElementById('sub-name').value.trim();
+            const routine_parent = document.getElementById('sub-parent').value;
+            const frequenza = document.getElementById('sub-frequency').value;
+            const inizio = document.getElementById('sub-start').value;
+            const fine = document.getElementById('sub-end').value;
+            const intervallo = parseInt(document.getElementById('sub-interval').value || '1', 10);
+            const status = document.getElementById('sub-status');
+
+            if (!nome || !inizio || !fine) {
+                status.textContent = 'Compila nome, data inizio e data fine.';
+                return;
+            }
+
+            const elementi = subItems
+                .filter(item => item.titolo.trim())
+                .map((item, index) => ({ ...item, id: item.id || `task_${index}` }));
+
+            const sottoroutine = { nome, routine_parent, frequenza, inizio, fine, intervallo_giorni: intervallo, elementi };
+            const res = await apiFetch(`${API}/sottoroutine/save`, {
+                method: 'POST',
+                body: JSON.stringify({ filename: nome, original_filename: editingSubName, sottoroutine })
+            });
+
+            if (res.ok) {
+                status.textContent = 'Sottoroutine salvata.';
+                editingSubName = nome;
+                await loadSubList();
+            } else {
+                const data = await res.json();
+                status.textContent = data.detail || 'Errore salvataggio.';
+            }
+        }
+
+        async function loadSubList() {
+            const container = document.getElementById('sub-list');
+            const list = await (await apiFetch(`${API}/sottoroutine/list`)).json();
+            const details = await caricaDettagliDaLista('sottoroutine', list);
+            if (!details.length) {
+                container.innerHTML = '<p class="empty-state">Nessuna sottoroutine salvata.</p>';
+                return;
+            }
+            container.innerHTML = details.map(item => `
+                <div class="task-row" style="grid-template-columns:32px minmax(0, 1fr) auto;">
+                    <span></span>
+                    <span>
+                        <span class="task-title">${escapeHTML(item.nome)}</span>
+                        <span class="task-meta">${escapeHTML(item.routine_parent || 'Senza routine principale')} - ${escapeHTML(item.frequenza)}</span>
+                    </span>
+                    <span style="display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;">
+                        <button class="btn outline" onclick="editSubroutine('${safeEncoded(item.nome)}')">Modifica</button>
+                        <button class="btn danger" onclick="deleteSubroutine('${safeEncoded(item.nome)}')">Elimina</button>
+                    </span>
+                </div>
+            `).join('');
+        }
+    </script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+

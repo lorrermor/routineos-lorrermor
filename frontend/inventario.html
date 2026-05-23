@@ -1,0 +1,185 @@
+﻿<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoutineOS - Inventario Professionale</title>
+       <link rel="icon" type="image/x-icon" href="favicon-v2.ico">
+
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<link rel="icon" href="icona.svg" type="image/svg+xml">
+<link rel="manifest" href="/site.webmanifest">
+    <link rel="stylesheet" href="styles.css?v=routineos-visual-4">
+    <style>
+        .btn-del {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.2s;
+        }
+        .btn-del:hover {
+            background: #ef4444;
+            color: white;
+            transform: scale(1.1);
+        }
+
+        .unit-input {
+            min-width: 82px;
+        }
+        
+        #inv-table tr { transition: background 0.2s; }
+        #inv-table tr:hover { background: rgba(255, 255, 255, 0.02); }
+        
+        input, select {
+            background: #1e293b;
+            border: 1px solid #334155;
+            color: white;
+            padding: 8px;
+            border-radius: 6px;
+        }
+        input:focus { border-color: var(--accent); outline: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header style="display:flex; align-items:center; justify-content:space-between; margin-bottom:30px; padding: 10px 0;">
+            <div style="display:flex; align-items:center; gap:20px;">
+                <button class="btn outline" onclick="window.location.href='index.html'">Home</button>
+                <h1 style="margin:0;">Gestione Dispensa</h1>
+            </div>
+            <div style="display:flex; align-items:center; gap:12px;">
+                <div id="status-save" style="font-size: 0.9rem; font-weight: bold; letter-spacing: 1px;"></div>
+                <button class="btn danger" onclick="logout()">↪ Logout</button>
+            </div>
+        </header>
+
+        <section class="card" style="padding: 0; overflow: hidden; border: 1px solid #334155;">
+            <table id="inv-table" style="width: 100%; border-collapse: collapse;">
+                <thead style="background: rgba(255,255,255,0.05); color: var(--accent); text-transform: uppercase; font-size: 0.75rem;">
+                    <tr>
+                        <th style="padding:20px; text-align:left;">Prodotto</th>
+                        <th style="padding:20px; text-align:center;">Scorta (Conf)</th>
+                        <th style="padding:20px; text-align:center;">Max</th>
+                        <th style="padding:20px; text-align:center;">Unita</th>
+                        <th style="padding:20px; text-align:center;">Contenuto</th>
+                        <th style="padding:20px; text-align:center;">Soglia Alert</th>
+                        <th style="padding:20px;"></th>
+                    </tr>
+                </thead>
+                <tbody id="inventory-table-body"></tbody>
+            </table>
+        </section>
+
+        <footer style="margin-top:30px; display:flex; gap:15px; padding-bottom: 50px;">
+            <button class="btn primary" style="flex:2; padding: 22px; font-weight: bold; font-size: 1.1rem; box-shadow: 0 10px 20px rgba(0,0,0,0.3);" onclick="salvaTuttoInventario()">
+                SALVA TUTTE LE MODIFICHE
+            </button>
+            <button class="btn outline" style="flex:1;" onclick="aggiungiRigaVuota()">+ AGGIUNGI NUOVO</button>
+        </footer>
+    </div>
+    <script src="config.js?v=routineos-config-1"></script>
+
+    <script src="script.js?v=routineos-visual-4"></script>
+    <script>
+        // Funzioni locali specifiche per la gestione dell'interfaccia inventario
+        function aggiungiRigaVuota() {
+            const body = document.getElementById('inventory-table-body');
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = "1px solid #1e293b";
+            tr.innerHTML = `
+                <td style="padding:15px;"><input type="text" placeholder="Es: Farina" class="edit-nome" style="width:100%"></td>
+                <td style="padding:15px; text-align:center;"><input type="number" value="1" step="0.1" class="edit-attuale" style="width:80px"></td>
+                <td style="padding:15px; text-align:center;"><input type="number" value="5" class="edit-max" style="width:80px"></td>
+                <td style="padding:15px; text-align:center;">
+                    <input class="edit-unita unit-input" list="unita-standard" value="g" placeholder="g, ml, pz...">
+                </td>
+                <td style="padding:15px; text-align:center;"><input type="number" value="1000" class="edit-fattore" style="width:100px"></td>
+                <td style="padding:15px; text-align:center;"><input type="number" value="1" class="edit-alert" style="width:80px"></td>
+                <td style="padding:15px; text-align:center;">
+                    <button class="btn-del" onclick="this.parentElement.parentElement.remove()">X</button>
+                </td>
+            `;
+            body.appendChild(tr);
+        }
+
+        async function salvaTuttoInventario() {
+    const status = document.getElementById('status-save');
+    status.style.color = "var(--accent)";
+    status.innerText = "SALVATAGGIO...";
+
+    const rows = document.querySelectorAll('#inventory-table-body tr');
+    const listaPerServer = []; // Usiamo un array per evitare sovrascritture casuali
+
+    rows.forEach(row => {
+        const inputNome = row.querySelector('.edit-nome');
+        if (!inputNome || !inputNome.value.trim()) return;
+
+        const nomeRaw = inputNome.value.trim();
+        const nomePulito = nomeRaw.toLowerCase().replace(/\s+/g, '_');
+        
+        // Prendiamo l'unita e il fattore (contenuto)
+        const unita = row.querySelector('.edit-unita').value;
+        const fattore = parseFloat(row.querySelector('.edit-fattore').value) || 1;
+
+        // Creiamo l'oggetto con i nomi esatti che Python si aspetta
+        const data = {
+            original_nome: row.dataset.originalName || nomePulito,
+            nome: nomePulito,
+            confezioni_attuali: parseFloat(row.querySelector('.edit-attuale').value) || 0,
+            confezioni_massime: parseFloat(row.querySelector('.edit-max').value) || 0,
+            alert: parseFloat(row.querySelector('.edit-alert').value) || 0,
+            unita_misura: unita,
+            valore_per_confezione: fattore // <--- UNIFICATO QUI
+        };
+
+        listaPerServer.push(data);
+    });
+
+    try {
+        const res = await apiFetch(API + "/inventario/save", {
+            method: "POST",
+            headers: {"Content-Type":"application/json"},
+            // Inviamo l'inventario come lista (piu robusto)
+            body: JSON.stringify({ inventario: listaPerServer, delete_missing: true }) 
+        });
+
+        if(res.ok) {
+            status.style.color = "#10b981";
+            status.innerText = "DATI SALVATI!";
+            setTimeout(() => location.reload(), 800);
+        } else {
+            throw new Error("Errore server");
+        }
+    } catch (e) {
+        status.style.color = "#ef4444";
+        status.innerText = "ERRORE";
+        console.error(e);
+    }
+}
+    </script>
+    <datalist id="unita-standard">
+        <option value="g"></option>
+        <option value="ml"></option>
+        <option value="pz"></option>
+    </datalist>
+</body>
+</html>
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,595 @@
+﻿<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoutineOS - Profilo</title>
+    <link rel="icon" type="image/x-icon" href="favicon-v2.ico">
+    <link rel="stylesheet" href="styles.css?v=routineos-visual-4">
+    <style>
+        .profile-stack { display:grid; gap:18px; max-width:980px; }
+        .profile-hero { padding:0; overflow:hidden; }
+        .profile-cover { height:132px; background:linear-gradient(135deg,#0f766e,#2563eb); }
+        .profile-main { padding:0 24px 24px; display:grid; grid-template-columns:auto minmax(0,1fr); gap:18px; align-items:end; }
+        .avatar-wrap { width:124px; height:124px; border-radius:50%; border:4px solid #0f172a; overflow:hidden; background:#111827; margin-top:-54px; display:grid; place-items:center; color:white; font-size:2.15rem; font-weight:800; }
+        .avatar-wrap img { width:100%; height:100%; object-fit:cover; }
+        .profile-name { margin:0; font-size:2rem; }
+        .profile-bio { margin:8px 0 0; color:var(--dim); line-height:1.55; max-width:720px; }
+        .profile-empty { color:#64748b; font-style:italic; }
+        .profile-row { display:flex; gap:10px; flex-wrap:wrap; margin-top:14px; }
+        .profile-chip { border:1px solid #e2e8f0; background:#f8fafc; border-radius:999px; padding:7px 11px; color:#334155; font-size:.82rem; }
+        .section-head { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; margin-bottom:18px; }
+        .section-head h2 { margin:0; }
+        .section-head p { color:var(--dim); margin:5px 0 0; line-height:1.45; font-size:.86rem; }
+        .form-grid-2 { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+        .form-grid-2 .full { grid-column:1 / -1; }
+        .bio-editor { grid-column:1 / -1; width:100%; }
+        .bio-editor-head { display:flex; justify-content:space-between; gap:12px; align-items:flex-end; margin-bottom:8px; }
+        .bio-editor label { margin:0; }
+        .bio-editor small { display:block; color:var(--dim); margin:4px 0 0; line-height:1.35; }
+        .bio-counter { color:var(--dim); font-size:.78rem; white-space:nowrap; padding-top:2px; }
+        .bio-box { width:100%; box-sizing:border-box; height:132px; resize:none; line-height:1.6; background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:13px 14px; color:#111827; }
+        .bio-box:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(59,130,246,.14); outline:none; }
+        .photo-loader { border:1px dashed #cbd5e1; border-radius:8px; padding:14px; background:#f8fafc; display:flex; align-items:center; justify-content:space-between; gap:12px; }
+        .photo-loader input { display:none; }
+        .photo-loader span { color:var(--dim); font-size:.85rem; }
+        .code-box { display:flex; gap:10px; align-items:center; flex-wrap:wrap; padding:14px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; }
+        .code-value { font-family:monospace; font-size:1.15rem; color:var(--accent); letter-spacing:.04em; }
+        .connection-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; align-items:center; padding:13px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; }
+        .connection-meta { color:var(--dim); font-size:.78rem; margin-top:3px; }
+        .share-options { display:flex; gap:12px; flex-wrap:wrap; margin-top:12px; }
+        .share-options label { display:flex; gap:8px; align-items:center; border:1px solid #e2e8f0; border-radius:999px; padding:8px 11px; background:#f8fafc; color:#334155; }
+        .soft-panel { border:1px solid #e2e8f0; border-radius:8px; background:#fff; padding:14px; }
+        .portable-layout { display:grid; grid-template-columns:minmax(0,1.15fr) minmax(280px,.85fr); gap:16px; align-items:start; }
+        .portable-groups { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+        .portable-group { border:1px solid #e2e8f0; border-radius:8px; background:#fff; padding:13px; }
+        .portable-group header { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; margin-bottom:10px; }
+        .portable-group h3 { margin:0; font-size:.95rem; }
+        .portable-group span, .portable-empty { color:var(--dim); font-size:.78rem; }
+        .portable-select-all { color:var(--text); font-size:.8rem; display:flex; gap:6px; align-items:center; }
+        .portable-check-list { display:grid; gap:7px; max-height:190px; overflow:auto; padding-right:4px; }
+        .portable-check-list label, .import-preview-row { display:flex; gap:8px; align-items:center; border:1px solid #e2e8f0; border-radius:8px; padding:8px; background:#fff; color:#334155; font-size:.84rem; }
+        .portable-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; }
+        .import-box { display:grid; gap:12px; }
+        .import-file { border:1px dashed #cbd5e1; border-radius:8px; padding:16px; background:#f8fafc; }
+        .import-file input { margin-top:10px; }
+        .import-preview { display:grid; gap:8px; }
+        @media (max-width:760px) {
+            .profile-main, .form-grid-2, .portable-layout, .portable-groups { grid-template-columns:1fr; }
+            .form-grid-2 .full { grid-column:auto; }
+            .avatar-wrap { margin-top:-48px; }
+        }
+    </style>
+    <link rel="stylesheet" href="routineos-ui.css?v=routineos-ui-1">
+</head>
+<body class="routineos-page profile-page">
+    <div class="app-shell">
+        <aside class="side-menu">
+            <a href="index.html">🏠 Dashboard</a>
+            <a href="routine.html">✅ Routine</a>
+            <a href="sottoroutine.html">🧩 Sottoroutine</a>
+            <a href="menu.html">🍽️ Menu</a>
+            <div class="side-divider"></div>
+            <div class="side-section sheets-side-section">
+                <div class="side-sheet-list" data-sheets-nav>
+                    <a href="fogli.html">📄 Foglio bianco</a>
+                </div>
+                <button class="side-add" type="button" onclick="quickAddSheet()" title="Aggiungi foglio">＋ Foglio</button>
+            </div>
+            <div class="side-divider"></div>
+                        <a href="statistiche.html">📊 Statistiche</a>
+            <div class="side-divider"></div>
+            <a class="active" href="profile.html">👤 Profilo</a>
+            <button onclick="logout()">↪ Logout</button>
+        </aside>
+
+        <main class="container">
+            <header style="margin-bottom:30px; padding:10px 0;">
+                <h1 style="margin:0;">Profilo</h1>
+                <p style="color:var(--dim); margin:6px 0 0;">Account, profilo e connessioni.</p>
+            </header>
+
+            <div class="profile-stack">
+                <section class="card profile-hero">
+                    <div id="profile-cover" class="profile-cover"></div>
+                    <div class="profile-main">
+                        <div id="avatar-preview" class="avatar-wrap">P</div>
+                        <div>
+                            <h2 id="display-name" class="profile-name">Profilo RoutineOS</h2>
+                            <p id="display-bio" class="profile-bio profile-empty">Bio non ancora compilata.</p>
+                            <div class="profile-row">
+                                <span id="display-location" class="profile-chip">Localita non impostata</span>
+                                <span id="display-status" class="profile-chip">Attivo</span>
+                                <span id="display-visibility" class="profile-chip">Privato</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="card">
+                    <div class="section-head">
+                        <div>
+                            <h2>Profilo personale</h2>
+                            <p>Informazioni semplici per riconoscere il tuo account dentro l'app.</p>
+                        </div>
+                    </div>
+                    <div class="form-grid-2">
+                        <div>
+                            <label>Nickname</label>
+                            <input id="profile-nickname">
+                        </div>
+                        <div>
+                            <label>Localita</label>
+                            <input id="profile-location">
+                        </div>
+                        <div>
+                            <label>Stato</label>
+                            <select id="profile-status-field">
+                                <option value="Attivo">Attivo</option>
+                                <option value="Focus mode">Focus mode</option>
+                                <option value="In pausa">In pausa</option>
+                                <option value="Aperto a collaborazioni">Aperto a collaborazioni</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label>Visibilita</label>
+                            <select id="profile-visibility">
+                                <option value="Privato">Privato</option>
+                                <option value="Visibile ai contatti">Visibile ai contatti</option>
+                                <option value="Pubblico">Pubblico</option>
+                            </select>
+                        </div>
+                        <div class="bio-editor">
+                            <div class="bio-editor-head">
+                                <div>
+                                    <label>Bio</label>
+                                    <small>Compare nell'anteprima del profilo. Scrivi una descrizione breve e naturale.</small>
+                                </div>
+                                <span id="bio-counter" class="bio-counter">0 caratteri</span>
+                            </div>
+                            <textarea id="profile-bio" class="bio-box" rows="5" maxlength="500" placeholder="Es. Organizzo routine, pasti e priorita della settimana..."></textarea>
+                        </div>
+                        <div>
+                            <label>Foto profilo</label>
+                            <label class="photo-loader">
+                                <span id="photo-label">Scegli una foto</span>
+                                <strong class="btn outline" style="pointer-events:none;">Carica</strong>
+                                <input id="profile-photo" type="file" accept="image/*">
+                            </label>
+                        </div>
+                        <div>
+                            <label>Colore copertina</label>
+                            <select id="profile-cover-color">
+                                <option value="teal-blue">Teal e blu</option>
+                                <option value="green-slate">Verde e grafite</option>
+                                <option value="rose-indigo">Rosa e indaco</option>
+                                <option value="amber-emerald">Ambra e smeraldo</option>
+                            </select>
+                        </div>
+                        <div class="full">
+                            <label>Link personale o professionale</label>
+                            <input id="profile-link">
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:18px;">
+                        <button class="btn primary" onclick="saveSocialProfile()">Salva profilo</button>
+                        <button class="btn outline" onclick="loadProfile()">Annulla modifiche</button>
+                    </div>
+                    <div id="profile-save-status" style="margin-top:14px; color:var(--dim);"></div>
+                </section>
+
+                <section class="card">
+                    <div class="section-head">
+                        <div>
+                            <h2>Codice utente</h2>
+                            <p>Un identificativo facile da condividere con chi vuoi aggiungere alle connessioni.</p>
+                        </div>
+                    </div>
+                    <div class="code-box">
+                        <span id="profile-user-code" class="code-value">RO---------</span>
+                        <button class="btn outline" onclick="copyUserCode()">Copia codice</button>
+                    </div>
+                    <div class="soft-panel" style="margin-top:14px;">
+                        <strong>Preferenze di condivisione</strong>
+                        <p style="color:var(--dim); margin:6px 0 0; font-size:.86rem;">Scegli cosa vorresti rendere condivisibile con le connessioni abilitate.</p>
+                        <div class="share-options">
+                            <label><input id="share-menu" type="checkbox"> Menu</label>
+                            <label><input id="share-routines" type="checkbox"> Routine</label>
+                            <label><input id="share-sottoroutines" type="checkbox"> Sottoroutine</label>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="card">
+                    <div class="section-head">
+                        <div>
+                            <h2>Connessioni</h2>
+                            <p>Salva contatti con cui vuoi coordinare piani, routine o promemoria.</p>
+                        </div>
+                        <button class="btn outline" onclick="addConnection()">Aggiungi</button>
+                    </div>
+                    <div class="form-grid-2">
+                        <div>
+                            <label>Nome</label>
+                            <input id="connection-name">
+                        </div>
+                        <div>
+                            <label>Email, username o codice</label>
+                            <input id="connection-code">
+                        </div>
+                        <div>
+                            <label>Relazione</label>
+                            <select id="connection-relation">
+                                <option value="Amico">Amico</option>
+                                <option value="Famiglia">Famiglia</option>
+                                <option value="Coach">Coach</option>
+                                <option value="Collaboratore">Collaboratore</option>
+                                <option value="Accountability partner">Accountability partner</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label>Nota</label>
+                            <input id="connection-note">
+                        </div>
+                    </div>
+                    <div id="connections-list" class="task-list" style="margin-top:16px;"></div>
+                </section>
+
+                <section class="card">
+                    <div class="section-head">
+                        <div>
+                            <h2>Importa ed esporta dati</h2>
+                            <p>Scegli cosa trasferire tra routine, sottoroutine, piani menu, inventario e spesa extra.</p>
+                        </div>
+                        <button class="btn outline" onclick="initDataPortability()">Aggiorna elenco</button>
+                    </div>
+                    <div class="portable-layout">
+                        <div>
+                            <h3 style="margin:0 0 10px;">Esportazione selettiva</h3>
+                            <div id="export-data-groups" class="portable-groups">
+                                <p class="empty-state">Caricamento dati...</p>
+                            </div>
+                            <div class="portable-actions">
+                                <button class="btn outline" onclick="exportSelectedData('pdf')">PDF</button>
+                                <button class="btn outline" onclick="exportSelectedData('csv')">CSV</button>
+                                <button class="btn outline" onclick="exportSelectedData('excel')">Excel</button>
+                                <button class="btn outline" onclick="exportSelectedData('json')">JSON</button>
+                            </div>
+                            <div id="export-status" style="margin-top:12px; color:var(--dim); font-size:.86rem;"></div>
+                        </div>
+                        <div class="import-box">
+                            <h3 style="margin:0;">Importazione</h3>
+                            <div class="import-file">
+                                <strong>File da importare</strong>
+                                <p style="color:var(--dim); margin:6px 0 0; font-size:.86rem;">Consigliato JSON. Supportati anche CSV e l'Excel esportato da RoutineOS.</p>
+                                <input id="import-data-file" type="file" accept=".json,.csv,.xls,.xlsx,.html,.pdf" onchange="handleImportFile(event)">
+                            </div>
+                            <div id="import-preview" class="import-preview"></div>
+                            <button class="btn primary" onclick="importSelectedData()">Importa selezionati</button>
+                            <div id="import-status" style="color:var(--dim); font-size:.86rem;"></div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="card">
+                    <div class="section-head">
+                        <div>
+                            <h2>Account e sicurezza</h2>
+                            <p>Gestisci email e password del login.</p>
+                        </div>
+                    </div>
+                    <div class="form-grid-2">
+                        <div>
+                            <label>Email attuale</label>
+                            <input id="profile-email" disabled>
+                        </div>
+                        <div>
+                            <label>ID utente</label>
+                            <input id="profile-user-id" disabled>
+                        </div>
+                        <div>
+                            <label>Nuova email</label>
+                            <input id="new-email" type="email" placeholder="nuova@email.com">
+                        </div>
+                        <div style="display:flex; align-items:end;">
+                            <button class="btn outline" onclick="updateEmail()">Aggiorna email</button>
+                        </div>
+                        <div>
+                            <label>Nuova password</label>
+                            <input id="new-password" type="password" placeholder="Minimo 6 caratteri">
+                        </div>
+                        <div>
+                            <label>Ripeti nuova password</label>
+                            <input id="new-password-confirm" type="password" placeholder="Ripeti la password">
+                        </div>
+                        <div style="display:flex; align-items:end;">
+                            <button class="btn outline" onclick="updatePassword()">Aggiorna password</button>
+                        </div>
+                    </div>
+                    <div id="account-status" style="margin-top:14px; color:var(--dim);"></div>
+                </section>
+
+                <section class="card" style="border-left:5px solid var(--danger);">
+                    <h2 style="margin-top:0;">Zona pericolosa</h2>
+                    <p style="color:var(--dim);">Questa azione elimina i dati RoutineOS collegati al tuo utente.</p>
+                    <button class="btn danger" onclick="deleteAccount()">Elimina account</button>
+                    <div id="profile-status" style="margin-top:14px; color:var(--dim);"></div>
+                </section>
+            </div>
+        </main>
+    </div>
+    <script src="config.js?v=routineos-config-1"></script>
+
+    <script src="script.js?v=routineos-visual-4"></script>
+    <script>
+        let profileSocial = {
+            nickname: '',
+            bio: '',
+            location: '',
+            avatar: '',
+            cover_color: 'teal-blue',
+            visibility: 'Privato',
+            status: 'Attivo',
+            links: [],
+            connections: [],
+            share_menu: false,
+            share_routines: false,
+            share_sottoroutines: false
+        };
+        let userCode = 'RO---------';
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadProfile();
+            document.getElementById('profile-photo').addEventListener('change', handlePhotoUpload);
+            ['profile-nickname', 'profile-bio', 'profile-location', 'profile-status-field', 'profile-visibility', 'profile-cover-color', 'profile-link'].forEach(id => {
+                document.getElementById(id).addEventListener('input', () => {
+                    collectSocialProfile();
+                    updateBioCounter();
+                    renderProfilePreview();
+                });
+            });
+            ['share-menu', 'share-routines', 'share-sottoroutines'].forEach(id => {
+                document.getElementById(id).addEventListener('change', saveSocialProfile);
+            });
+        });
+
+        function coverStyle(value) {
+            const map = {
+                'teal-blue': 'linear-gradient(135deg,#0f766e,#2563eb)',
+                'green-slate': 'linear-gradient(135deg,#16a34a,#334155)',
+                'rose-indigo': 'linear-gradient(135deg,#e11d48,#4f46e5)',
+                'amber-emerald': 'linear-gradient(135deg,#d97706,#059669)'
+            };
+            return map[value] || map['teal-blue'];
+        }
+
+        async function loadProfile() {
+            const res = await apiFetch(`${API}/profile`);
+            const data = await res.json();
+            profileSocial = { ...profileSocial, ...(data.social || {}) };
+            userCode = data.user_code || `RO-${String(data.user_id || '--------').slice(0, 8).toUpperCase()}`;
+
+            document.getElementById('profile-email').value = data.email || localStorage.getItem('pantrypro_email') || '-';
+            document.getElementById('profile-user-id').value = data.user_id || localStorage.getItem('pantrypro_user_id') || '-';
+            document.getElementById('profile-user-code').textContent = userCode;
+            localStorage.setItem('pantrypro_email', data.email || '');
+
+            document.getElementById('profile-nickname').value = profileSocial.nickname || '';
+            document.getElementById('profile-location').value = profileSocial.location || '';
+            document.getElementById('profile-status-field').value = profileSocial.status || 'Attivo';
+            document.getElementById('profile-bio').value = profileSocial.bio || '';
+            document.getElementById('profile-cover-color').value = profileSocial.cover_color || 'teal-blue';
+            document.getElementById('profile-visibility').value = profileSocial.visibility || 'Privato';
+            document.getElementById('profile-link').value = (profileSocial.links || [])[0] || '';
+            document.getElementById('share-menu').checked = !!profileSocial.share_menu;
+            document.getElementById('share-routines').checked = !!profileSocial.share_routines;
+            document.getElementById('share-sottoroutines').checked = !!profileSocial.share_sottoroutines;
+            updateBioCounter();
+            renderProfilePreview();
+            renderConnections();
+        }
+
+        function updateBioCounter() {
+            const bio = document.getElementById('profile-bio');
+            const counter = document.getElementById('bio-counter');
+            if (!bio || !counter) return;
+            counter.textContent = `${bio.value.length}/500 caratteri`;
+        }
+
+        function collectSocialProfile() {
+            profileSocial.nickname = document.getElementById('profile-nickname').value.trim();
+            profileSocial.bio = document.getElementById('profile-bio').value.trim();
+            profileSocial.location = document.getElementById('profile-location').value.trim();
+            profileSocial.status = document.getElementById('profile-status-field').value;
+            profileSocial.cover_color = document.getElementById('profile-cover-color').value;
+            profileSocial.visibility = document.getElementById('profile-visibility').value;
+            profileSocial.links = [document.getElementById('profile-link').value.trim()].filter(Boolean);
+            profileSocial.share_menu = document.getElementById('share-menu').checked;
+            profileSocial.share_routines = document.getElementById('share-routines').checked;
+            profileSocial.share_sottoroutines = document.getElementById('share-sottoroutines').checked;
+            profileSocial.connections = profileSocial.connections || [];
+            return profileSocial;
+        }
+
+        function renderProfilePreview() {
+            const nickname = profileSocial.nickname || 'Profilo RoutineOS';
+            document.getElementById('display-name').textContent = nickname;
+            const bio = document.getElementById('display-bio');
+            bio.textContent = profileSocial.bio || 'Bio non ancora compilata.';
+            bio.classList.toggle('profile-empty', !profileSocial.bio);
+            document.getElementById('display-location').textContent = profileSocial.location || 'Localita non impostata';
+            document.getElementById('display-status').textContent = profileSocial.status || 'Attivo';
+            document.getElementById('display-visibility').textContent = profileSocial.visibility || 'Privato';
+            document.getElementById('profile-cover').style.background = coverStyle(profileSocial.cover_color);
+            const avatar = document.getElementById('avatar-preview');
+            if (profileSocial.avatar) {
+                avatar.textContent = '';
+                const img = document.createElement('img');
+                img.src = profileSocial.avatar;
+                img.alt = 'Foto profilo';
+                avatar.appendChild(img);
+            } else {
+                avatar.textContent = nickname.slice(0, 1).toUpperCase();
+            }
+        }
+
+        async function saveSocialProfile() {
+            const status = document.getElementById('profile-save-status');
+            collectSocialProfile();
+            const res = await apiFetch(`${API}/profile/social`, {
+                method: 'PUT',
+                body: JSON.stringify({ social: profileSocial })
+            });
+            const data = await res.json();
+            status.textContent = res.ok ? 'Profilo salvato.' : (data.detail || 'Errore salvataggio profilo.');
+        }
+
+        async function handlePhotoUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            document.getElementById('photo-label').textContent = file.name;
+            const reader = new FileReader();
+            reader.onload = () => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const size = 360;
+                    canvas.width = size;
+                    canvas.height = size;
+                    const ctx = canvas.getContext('2d');
+                    const scale = Math.max(size / img.width, size / img.height);
+                    const w = img.width * scale;
+                    const h = img.height * scale;
+                    ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+                    profileSocial.avatar = canvas.toDataURL('image/jpeg', 0.82);
+                    renderProfilePreview();
+                    saveSocialProfile();
+                };
+                img.src = reader.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        async function updateEmail() {
+            const status = document.getElementById('account-status');
+            const email = document.getElementById('new-email').value.trim();
+            if (!email || !email.includes('@')) {
+                status.textContent = 'Inserisci una nuova email valida.';
+                return;
+            }
+            status.textContent = 'Invio richiesta di cambio email...';
+            try {
+                const res = await apiFetch(`${API}/profile/email`, { method: 'PUT', body: JSON.stringify({ email }) });
+                const data = await res.json();
+                status.textContent = data.message || data.detail || 'Operazione completata.';
+                if (res.ok) document.getElementById('new-email').value = '';
+            } catch (e) {
+                status.textContent = 'Errore di connessione durante il cambio email.';
+            }
+        }
+
+        async function updatePassword() {
+            const status = document.getElementById('account-status');
+            const password = document.getElementById('new-password').value;
+            const confirm = document.getElementById('new-password-confirm').value;
+            if (password.length < 6) {
+                status.textContent = 'La password deve avere almeno 6 caratteri.';
+                return;
+            }
+            if (password !== confirm) {
+                status.textContent = 'Le password non coincidono.';
+                return;
+            }
+            status.textContent = 'Aggiorno la password...';
+            try {
+                const res = await apiFetch(`${API}/profile/password`, { method: 'PUT', body: JSON.stringify({ password }) });
+                const data = await res.json();
+                status.textContent = data.message || data.detail || 'Operazione completata.';
+                if (res.ok) {
+                    document.getElementById('new-password').value = '';
+                    document.getElementById('new-password-confirm').value = '';
+                }
+            } catch (e) {
+                status.textContent = 'Errore di connessione durante il cambio password.';
+            }
+        }
+
+        function copyUserCode() {
+            navigator.clipboard?.writeText(userCode);
+            document.getElementById('profile-save-status').textContent = 'Codice copiato.';
+        }
+
+        function addConnection() {
+            const name = document.getElementById('connection-name').value.trim();
+            const code = document.getElementById('connection-code').value.trim();
+            const relation = document.getElementById('connection-relation').value;
+            const note = document.getElementById('connection-note').value.trim();
+            if (!name && !code) return;
+            profileSocial.connections = profileSocial.connections || [];
+            profileSocial.connections.push({ id: `conn_${Date.now()}`, name: name || code, code, relation, note, status: 'Salvato' });
+            document.getElementById('connection-name').value = '';
+            document.getElementById('connection-code').value = '';
+            document.getElementById('connection-note').value = '';
+            renderConnections();
+            saveSocialProfile();
+        }
+
+        function removeConnection(id) {
+            profileSocial.connections = (profileSocial.connections || []).filter(item => item.id !== id);
+            renderConnections();
+            saveSocialProfile();
+        }
+
+        function renderConnections() {
+            const list = document.getElementById('connections-list');
+            const connections = profileSocial.connections || [];
+            if (!connections.length) {
+                list.innerHTML = '<p class="empty-state">Nessuna connessione salvata.</p>';
+                return;
+            }
+            list.innerHTML = connections.map(item => `
+                <div class="connection-row">
+                    <div>
+                        <strong>${escapeHTML(item.name || item.code)}</strong>
+                        <div class="connection-meta">${escapeHTML(item.relation || 'Contatto')} - ${escapeHTML(item.code || 'nessun codice')} - ${escapeHTML(item.status || 'Salvato')}</div>
+                        ${item.note ? `<div class="connection-meta">${escapeHTML(item.note)}</div>` : ''}
+                    </div>
+                    <button class="btn danger" onclick="removeConnection('${item.id}')">Rimuovi</button>
+                </div>
+            `).join('');
+        }
+
+        async function deleteAccount() {
+            const status = document.getElementById('profile-status');
+            const ok = confirm('Vuoi davvero eliminare account e dati RoutineOS? Questa azione non si annulla.');
+            if (!ok) return;
+            status.textContent = 'Eliminazione in corso...';
+            try {
+                const res = await apiFetch(`${API}/profile/delete-account`, { method: 'DELETE' });
+                const data = await res.json();
+                status.textContent = data.message || 'Operazione completata.';
+                if (data.auth_deleted) {
+                    if (typeof clearUserLocalData === 'function') clearUserLocalData();
+                    setTimeout(() => logout(), 2200);
+                } else {
+                    status.textContent = `${data.message || 'Dati RoutineOS cancellati, ma login Supabase non eliminato.'} Per liberare anche l'email serve configurare SUPABASE_SERVICE_ROLE_KEY nel backend.`;
+                }
+            } catch (e) {
+                status.textContent = 'Errore durante eliminazione account.';
+            }
+        }
+    </script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+

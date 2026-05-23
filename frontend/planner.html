@@ -1,0 +1,223 @@
+﻿<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoutineOS - Planner Professionale</title>
+    <link rel="icon" type="image/x-icon" href="favicon-v2.ico">
+    <link rel="stylesheet" href="styles.css?v=routineos-visual-4">
+    <style>
+        .day-section {
+            background: var(--card-bg);
+            border: 1px solid #334155;
+            border-radius: 12px;
+            margin-bottom: 25px;
+            overflow: hidden;
+            transition: transform 0.2s;
+        }
+        .day-section:hover { border-color: var(--accent); }
+        .day-header {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px 20px;
+            border-bottom: 1px solid #334155;
+            color: var(--accent);
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .btn-del {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            border-radius: 50%; width: 24px; height: 24px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; font-size: 14px; transition: all 0.2s;
+        }
+        .btn-del:hover { background: #ef4444; color: white; transform: scale(1.1); }
+        .actions-footer {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 15px;
+            margin-top: 30px; margin-bottom: 60px;
+        }
+        #btn-elimina-piano {
+            background: transparent; color: #ef4444; border: 1px solid #ef4444;
+            padding: 10px 15px; border-radius: 8px; cursor: pointer; font-weight: bold;
+        }
+        /* Stile per i pulsanti Copia/Incolla */
+.btn-cp {
+    background: #334155;
+    color: #f8fafc;
+    border: 1px solid #475569;
+    padding: 2px 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: bold;
+    transition: all 0.2s;
+}
+
+.btn-cp:hover {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+}
+    </style>
+    <link rel="stylesheet" href="routineos-ui.css?v=routineos-ui-1">
+</head>
+<body class="routineos-page planner-page">
+    <main class="container">
+        <header style="display:flex; align-items:center; justify-content:space-between; margin-bottom:30px; padding: 10px 0;">
+            <div style="display:flex; align-items:center; gap:20px;">
+                <button class="btn outline" onclick="window.location.href='index.html'">Home</button>
+                <h1 style="margin:0;">Planner Settimanale</h1>
+            </div>
+            <button class="btn danger" onclick="logout()">↪ Logout</button>
+        </header>
+
+        <section class="card" style="border-bottom: 4px solid var(--accent); margin-bottom: 25px;">
+            <label for="select-menu-to-edit" style="display:block; margin-bottom:12px; font-weight:bold; color:var(--accent); text-transform: uppercase; font-size: 0.8rem;">
+                Scegli un'operazione:
+            </label>
+            <div style="display:flex; gap:10px;">
+                <select id="select-menu-to-edit" class="input-field" style="flex:1; padding:14px; background:#fff; color:#111827; border:1px solid #cbd5e1; border-radius:8px; cursor: pointer;">
+                    <option value="NEW">+ Crea Nuovo Piano</option>
+                </select>
+                <button id="btn-elimina-piano" onclick="deleteCurrentPlan()" style="display:none;">Elimina</button>
+            </div>
+        </section>
+
+        <section class="card">
+            <h3 style="margin-top:0; color: var(--dim); font-size: 0.9rem; text-transform: uppercase;">1. Informazioni Generali</h3>
+            <div style="display:grid; grid-template-columns: 2fr 1fr 1fr; gap:15px;">
+                <div class="input-group">
+                    <label style="font-size:0.75rem; color:var(--dim);">Nome Piano</label>
+                    <input type="text" id="plan-name" placeholder="Es: Inverno Settimana 1" style="width:100%;">
+                </div>
+                <div class="input-group">
+                    <label style="font-size:0.75rem; color:var(--dim);">Data Inizio</label>
+                    <input type="date" id="plan-start" style="width:100%;">
+                </div>
+                <div class="input-group">
+                    <label style="font-size:0.75rem; color:var(--dim);">Data Fine</label>
+                    <input type="date" id="plan-end" style="width:100%;">
+                </div>
+            </div>
+        </section>
+
+        <section id="giorni-container" style="margin-top: 20px;"></section>
+        
+        <footer class="actions-footer">
+            <button class="btn primary" style="font-size:1.2rem; padding:22px;" onclick="finalSave(false)">
+                Salva e Attiva
+            </button>
+            <button class="btn outline" style="font-size:1.2rem; padding:22px;" onclick="finalSave(true)">
+                Duplica Piano
+            </button>
+        </footer>
+    </main>
+
+    <datalist id="lista-ingredienti-inventario"></datalist>
+    <script src="config.js?v=routineos-config-1"></script>
+
+    <script src="script.js?v=routineos-visual-4"></script>
+
+    <script>
+        // Memoria per il copia/incolla
+let plannerClipboard = {
+    giorno: null,  // Intera giornata (Colazione, Pranzo, Cena)
+    pasto: null    // Singolo pasto (es. solo Colazione)
+};
+/**
+ * LOGICA PLANNER - VERSIONE CORRETTA SENZA DOPPIONI
+ */
+
+async function setupPlanner() {
+    const sel = document.getElementById('select-menu-to-edit');
+    if (!sel) return;
+
+    try {
+        // Pulisce tutto prima di iniziare
+        sel.innerHTML = '<option value="NEW">+ Crea Nuovo Piano</option>';
+
+        // Carica inventario per i suggerimenti
+        const invRes = await apiFetch(`${API}/get-inventario`);
+        const inv = await invRes.json();
+        if (typeof popolaDatalist === "function") popolaDatalist(inv);
+
+        // Carica lista menu
+        const resFiles = await apiFetch(`${API}/menu/list`);
+        let files = await resFiles.json();
+        if (files.menus) files = files.menus;
+
+        // Usiamo un Set per sicurezza estrema contro i duplicati di rete
+        const fileSet = new Set(files);
+
+        for (let f of fileSet) {
+            const resP = await apiFetch(`${API}/menu/${f}`);
+            if (resP.ok) {
+                const p = await resP.json();
+                const opt = document.createElement('option');
+                opt.value = f;
+                opt.textContent = `${p.nome || f} (${p.inizio || '---'})`;
+                sel.appendChild(opt);
+            }
+        }
+
+        sel.onchange = async (e) => {
+            const val = e.target.value;
+            if (val === "NEW") {
+                originalFilename = null;
+                currentPlan = { nome: "", inizio: "", fine: "", pasti: [] };
+                document.getElementById('btn-elimina-piano').style.display = "none";
+            } else {
+                originalFilename = val;
+                const res = await apiFetch(`${API}/menu/${val}`);
+                currentPlan = await res.json();
+                if (!currentPlan.pasti) currentPlan.pasti = [];
+                document.getElementById('btn-elimina-piano').style.display = "inline-block";
+            }
+            // Aggiorna UI
+            document.getElementById('plan-name').value = currentPlan.nome || "";
+            document.getElementById('plan-start').value = currentPlan.inizio || "";
+            document.getElementById('plan-end').value = currentPlan.fine || "";
+            renderGiorni();
+        };
+
+        // Inizializzazione pagina vuota
+        currentPlan = { nome: "", inizio: "", fine: "", pasti: [] };
+        renderGiorni();
+
+    } catch (e) {
+        console.error("Errore setupPlanner:", e);
+    }
+}
+
+// Funzione Elimina (Spostata qui per sicurezza)
+async function deleteCurrentPlan() {
+    if(!originalFilename || originalFilename === "NEW") return;
+    if(!confirm(`Eliminare definitivamente "${currentPlan.nome}"?`)) return;
+    try {
+        const res = await apiFetch(`${API}/menu/${originalFilename}`, { method: "DELETE" });
+        if(res.ok) {
+            alert("Eliminato!");
+            window.location.reload();
+        }
+    } catch(e) { alert("Errore connessione"); }
+}
+
+// Avvio
+setupPlanner();
+    </script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
