@@ -1,4 +1,4 @@
-import os
+﻿import os
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -14,7 +14,7 @@ import logica
 
 # --- CONFIGURAZIONE ---
 # Le credenziali vengono lette dalle variabili d'ambiente (sicuro per produzione)
-# Su Render: Settings → Environment Variables
+# Su Render: Settings â†’ Environment Variables
 def load_local_env_from_launcher():
     root = Path(__file__).resolve().parents[1]
     files = [root / "pantrypro.local.env", root / "avvia-pantrypro.bat"]
@@ -52,7 +52,9 @@ CORS_ORIGINS = [
     if origin.strip()
 ]
 
-supabase: Client = create_client(URL_SB, KEY_SB)
+auth_supabase: Client = create_client(URL_SB, KEY_SB)
+db_key = SERVICE_ROLE_KEY or KEY_SB
+supabase: Client = create_client(URL_SB, db_key)
 logica.supabase = supabase
 
 app = FastAPI()
@@ -103,7 +105,7 @@ def get_user_id(authorization: str = Header(None)) -> str:
     """
     Estrae e verifica il JWT dal header Authorization.
     Restituisce lo user_id (UUID) dell'utente autenticato.
-    Lancia HTTPException 401 se il token è assente o non valido.
+    Lancia HTTPException 401 se il token Ã¨ assente o non valido.
     """
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Token mancante o non valido.")
@@ -112,7 +114,7 @@ def get_user_id(authorization: str = Header(None)) -> str:
     
     try:
         # Supabase verifica il JWT e restituisce i dati utente
-        user_response = supabase.auth.get_user(token)
+        user_response = auth_supabase.auth.get_user(token)
         if not user_response or not user_response.user:
             raise HTTPException(status_code=401, detail="Token non valido.")
         return str(user_response.user.id)
@@ -296,7 +298,7 @@ async def db_session_middleware(request: Request, call_next):
 
 
 # -------------------------------------------------------
-# AUTH — Login e Registrazione
+# AUTH â€” Login e Registrazione
 # -------------------------------------------------------
 
 @app.post("/auth/register")
@@ -309,7 +311,7 @@ async def register(data: dict):
         raise HTTPException(status_code=400, detail="Email e password obbligatorie.")
     
     try:
-        response = supabase.auth.sign_up({"email": email, "password": password})
+        response = auth_supabase.auth.sign_up({"email": email, "password": password})
         if response.user:
             # Crea la riga config per il nuovo utente
             logica.ensure_sync_config(str(response.user.id))
@@ -335,7 +337,7 @@ async def login(data: dict):
         raise HTTPException(status_code=400, detail="Email e password obbligatorie.")
     
     try:
-        response = supabase.auth.sign_in_with_password({"email": email, "password": password})
+        response = auth_supabase.auth.sign_in_with_password({"email": email, "password": password})
         if response.session:
             return {
                 "status": "success",
@@ -359,7 +361,7 @@ async def refresh_auth(data: dict):
         raise HTTPException(status_code=400, detail="Refresh token mancante.")
 
     try:
-        response = supabase.auth.refresh_session(refresh_token)
+        response = auth_supabase.auth.refresh_session(refresh_token)
         if response.session:
             return {
                 "status": "success",
@@ -379,7 +381,7 @@ async def refresh_auth(data: dict):
 async def logout(authorization: str = Header(None)):
     """Invalida il token corrente."""
     try:
-        supabase.auth.sign_out()
+        auth_supabase.auth.sign_out()
         return {"status": "success"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -396,9 +398,9 @@ async def reset_password(data: dict):
 
     try:
         if redirect_to:
-            supabase.auth.reset_password_email(email, {"redirect_to": redirect_to})
+            auth_supabase.auth.reset_password_email(email, {"redirect_to": redirect_to})
         else:
-            supabase.auth.reset_password_email(email)
+            auth_supabase.auth.reset_password_email(email)
         return {
             "status": "success",
             "message": "Email di recupero inviata. Se l'account esiste, apri il link ricevuto e imposta la nuova password dall'app."
@@ -411,7 +413,7 @@ async def reset_password(data: dict):
 async def get_profile(authorization: str = Header(None), user_id: str = Depends(get_user_id)):
     token = get_auth_token(authorization)
     try:
-        user_response = supabase.auth.get_user(token)
+        user_response = auth_supabase.auth.get_user(token)
         user = user_response.user
         social = load_user_metadata_profile(user)
         if not social:
@@ -1170,3 +1172,4 @@ async def reset_sync(user_id: str = Depends(get_user_id)):
         logica.aggiungi_al_log("RIPRISTINO SCARICO", "Scarico ricalcolato manualmente.", user_id)
         return {"status": "success"}
     return {"status": "error", "message": "Impossibile resettare lo scarico."}
+
