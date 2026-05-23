@@ -1,10 +1,9 @@
-﻿const API = localStorage.getItem("pantrypro_api")
+﻿const isLocalFrontend = location.protocol === "file:" || location.hostname === "localhost" || location.hostname === "127.0.0.1";
+const savedApiUrl = localStorage.getItem("pantrypro_api") || "";
+const savedApiIsLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/i.test(savedApiUrl);
+const API = (isLocalFrontend || !savedApiIsLocal ? savedApiUrl : "")
     || (window.ROUTINEOS_CONFIG && window.ROUTINEOS_CONFIG.API_URL)
-    || (
-        location.protocol === "file:" || location.hostname === "localhost" || location.hostname === "127.0.0.1"
-            ? "http://localhost:8765"
-            : ""
-    );
+    || (isLocalFrontend ? "http://localhost:8765" : "");
 
 async function clearOldAppCaches() {
     try {
@@ -3668,6 +3667,7 @@ function pasteDishByIndex(pastoIndex, piattoIndex) {
     pasto.piatti[piattoIndex] = JSON.parse(JSON.stringify(plannerClipboard.piatto));
     renderGiorni();
 }
+
 
 
 
