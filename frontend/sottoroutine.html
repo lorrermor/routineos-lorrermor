@@ -92,7 +92,7 @@
     </div>
     <script src="config.js?v=routineos-config-1"></script>
 
-    <script src="script.js?v=routineos-api-5"></script>
+    <script src="script.js?v=routineos-api-6"></script>
     <script>
         (function () {
             function key() { return `pantrypro_sheets:${localStorage.getItem("pantrypro_user_id") || "local"}`; }
@@ -121,6 +121,7 @@
     <script>
         let subItems = [];
         let editingSubName = null;
+        let subMoveSelection = null;
 
         document.addEventListener('DOMContentLoaded', async () => {
             await loadParents();
@@ -228,12 +229,21 @@
             if (from === to || from < 0 || to < 0) return;
             const [item] = subItems.splice(from, 1);
             subItems.splice(to, 0, item);
+            subMoveSelection = null;
             renderSubItems();
         }
 
         function startSubDrag(event, index) {
+            subMoveSelection = index;
             event.dataTransfer.setData('text/plain', String(index));
             event.dataTransfer.effectAllowed = 'move';
+        }
+
+        function selectSubMove(event, index) {
+            event.preventDefault();
+            event.stopPropagation();
+            subMoveSelection = index;
+            renderSubItems();
         }
 
         function dropSubItem(event, index) {
@@ -242,12 +252,23 @@
             moveSubItem(from, index);
         }
 
+        function dropSubTap(event, index) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (subMoveSelection === null) return;
+            moveSubItem(subMoveSelection, index);
+        }
+
+        function subDropButton(index) {
+            return subMoveSelection === null ? '' : `<button class="planner-drop-btn routine-drop-btn" onclick="dropSubTap(event, ${index})">Qui</button>`;
+        }
+
         function renderSubItems() {
             const container = document.getElementById('sub-items');
             container.innerHTML = subItems.map((item, index) => `
-                <div class="editor-row subroutine-editor-row drag-drop-target" ondragover="event.preventDefault()" ondrop="dropSubItem(event, ${index})" style="grid-template-columns: 34px 82px minmax(0, 1fr) 160px 42px;">
-                    <span class="drag-handle" draggable="true" ondragstart="startSubDrag(event, ${index})" title="Trascina">::</span>
-                    <input type="time" value="${escapeHTML(item.orario || '')}" onchange="subItems[${index}].orario=this.value">
+                <div class="editor-row subroutine-editor-row drag-drop-target" ondragover="event.preventDefault()" ondrop="dropSubItem(event, ${index})" style="grid-template-columns: 30px 70px minmax(0, 1fr) 142px auto 38px;">
+                    <span class="drag-handle" draggable="true" onclick="selectSubMove(event, ${index})" ondragstart="startSubDrag(event, ${index})" title="Trascina">::</span>
+                    <input class="activity-time-input" type="time" value="${escapeHTML(item.orario || '')}" onchange="subItems[${index}].orario=this.value">
                     <input value="${escapeHTML(item.titolo)}" placeholder="Es: squat, stretching, serie addominali" onchange="subItems[${index}].titolo=this.value">
                     <select onchange="subItems[${index}].giorno_settimana=this.value">
                         <option value="" ${item.giorno_settimana === '' ? 'selected' : ''}>Ogni giorno dovuto</option>
@@ -259,6 +280,7 @@
                         <option value="6" ${item.giorno_settimana === '6' ? 'selected' : ''}>Sabato</option>
                         <option value="0" ${item.giorno_settimana === '0' ? 'selected' : ''}>Domenica</option>
                     </select>
+                    ${subDropButton(index)}
                     <button class="btn danger" onclick="removeSubItem(${index})">X</button>
                 </div>
             `).join('');
@@ -326,6 +348,7 @@
     </script>
 </body>
 </html>
+
 
 
 
