@@ -67,6 +67,20 @@
                     </div>
                 </div>
 
+                <div class="soft-panel" style="margin-top:16px;">
+                    <strong>Eccezioni</strong>
+                    <p style="color:var(--dim); margin:6px 0 10px; font-size:.86rem;">Scegli i giorni in cui questa routine non deve comparire, ad esempio la domenica.</p>
+                    <div id="routine-excluded-days" class="share-options">
+                        <label><input type="checkbox" value="Lunedi"> Lunedi</label>
+                        <label><input type="checkbox" value="Martedi"> Martedi</label>
+                        <label><input type="checkbox" value="Mercoledi"> Mercoledi</label>
+                        <label><input type="checkbox" value="Giovedi"> Giovedi</label>
+                        <label><input type="checkbox" value="Venerdi"> Venerdi</label>
+                        <label><input type="checkbox" value="Sabato"> Sabato</label>
+                        <label><input type="checkbox" value="Domenica"> Domenica</label>
+                    </div>
+                </div>
+
                 <h3 style="margin-top:24px;">Attivita della routine</h3>
                 <div id="routine-items" class="editor-list"></div>
                 <div style="display:flex; gap:12px; margin-top:16px;">
@@ -88,7 +102,7 @@
     </div>
     <script src="config.js?v=routineos-config-1"></script>
 
-    <script src="script.js?v=routineos-api-2"></script>
+    <script src="script.js?v=routineos-api-3"></script>
     <script>
         (function () {
             function key() { return `pantrypro_sheets:${localStorage.getItem("pantrypro_user_id") || "local"}`; }
@@ -128,6 +142,17 @@
             document.getElementById('custom-frequency-wrap').style.display = isCustom ? 'block' : 'none';
         }
 
+        function getExcludedDays() {
+            return Array.from(document.querySelectorAll('#routine-excluded-days input:checked')).map(input => input.value);
+        }
+
+        function setExcludedDays(days) {
+            const selected = new Set(days || []);
+            document.querySelectorAll('#routine-excluded-days input').forEach(input => {
+                input.checked = selected.has(input.value);
+            });
+        }
+
         function addRoutineItem(value = '') {
             const item = typeof value === 'object'
                 ? { id: value.id || `task_${Date.now()}_${routineItems.length}`, titolo: value.titolo || value.nome || '', orario: value.orario || '', note: value.note || '' }
@@ -145,6 +170,7 @@
             document.getElementById('routine-end').value = '2099-12-31';
             document.getElementById('routine-interval').value = '7';
             document.getElementById('routine-status').textContent = '';
+            setExcludedDays([]);
             toggleCustomFrequency();
             routineItems = [];
             addRoutineItem();
@@ -157,6 +183,7 @@
             document.getElementById('routine-start').value = routine.inizio || new Date().toISOString().split('T')[0];
             document.getElementById('routine-end').value = routine.fine || '2099-12-31';
             document.getElementById('routine-interval').value = routine.intervallo_giorni || '7';
+            setExcludedDays(routine.giorni_esclusi || routine.exclude_days || []);
             toggleCustomFrequency();
             routineItems = [];
             (routine.elementi || []).forEach(addRoutineItem);
@@ -242,7 +269,7 @@
                 .filter(item => item.titolo.trim())
                 .map((item, index) => ({ ...item, id: item.id || `task_${index}` }));
 
-            const routine = { nome, frequenza, inizio, fine, intervallo_giorni: intervallo, elementi };
+            const routine = { nome, frequenza, inizio, fine, intervallo_giorni: intervallo, giorni_esclusi: getExcludedDays(), elementi };
             const res = await apiFetch(`${API}/routine/save`, {
                 method: 'POST',
                 body: JSON.stringify({ filename: nome, original_filename: editingRoutineName, routine })
@@ -283,6 +310,7 @@
     </script>
 </body>
 </html>
+
 
 
 

@@ -1833,7 +1833,98 @@ datalist option {
   color: #92400e;
 }
 
+.mobile-menu-toggle,
+.mobile-menu-backdrop {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  body {
+    padding: 14px;
+    padding-top: 74px;
+  }
+
+  .app-shell {
+    display: block;
+    max-width: none;
+  }
+
+  .container {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .mobile-menu-toggle {
+    display: inline-flex;
+    position: fixed;
+    left: 14px;
+    top: 14px;
+    z-index: 1200;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 0 14px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: #ffffff;
+    color: #0f172a;
+    box-shadow: var(--shadow-md);
+    font-weight: 800;
+  }
+
+  .mobile-menu-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1090;
+    background: rgba(15, 23, 42, 0.35);
+  }
+
+  body.side-menu-open .mobile-menu-backdrop {
+    display: block;
+  }
+
+  .side-menu {
+    position: fixed;
+    z-index: 1100;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(82vw, 310px);
+    max-height: none;
+    overflow-y: auto;
+    border-radius: 0 14px 14px 0;
+    transform: translateX(-105%);
+    transition: transform 0.22s ease;
+  }
+
+  body.side-menu-open .side-menu {
+    transform: translateX(0);
+  }
+}
+
 @media (max-width: 760px) {
+  .planner-page header,
+  .planner-page header > div,
+  .planner-page .card > div[style*="display:flex"],
+  .planner-page .actions-footer {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  .planner-page .card > div[style*="grid-template-columns"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  #select-menu-to-edit,
+  #plan-name,
+  #plan-start,
+  #plan-end,
+  #btn-elimina-piano {
+    min-width: 0;
+    width: 100% !important;
+  }
+
   .planner-ingredient-row {
     grid-template-columns: 28px minmax(0, 1fr) 80px 48px !important;
   }

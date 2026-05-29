@@ -219,13 +219,17 @@
                         </div>
                         <div>
                             <label>Relazione</label>
-                            <select id="connection-relation">
+                            <select id="connection-relation" onchange="toggleCustomRelation()">
                                 <option value="Amico">Amico</option>
                                 <option value="Famiglia">Famiglia</option>
-                                <option value="Coach">Coach</option>
-                                <option value="Collaboratore">Collaboratore</option>
-                                <option value="Accountability partner">Accountability partner</option>
+                                <option value="Lavoro">Lavoro</option>
+                                <option value="Partner">Partner</option>
+                                <option value="Personalizzata">Personalizzata</option>
                             </select>
+                        </div>
+                        <div id="custom-relation-wrap" style="display:none;">
+                            <label>Relazione personalizzata</label>
+                            <input id="connection-relation-custom" placeholder="Es: coach, team, nutrizionista">
                         </div>
                         <div>
                             <label>Nota</label>
@@ -233,6 +237,18 @@
                         </div>
                     </div>
                     <div id="connections-list" class="task-list" style="margin-top:16px;"></div>
+                    <div id="connection-share-status" style="margin-top:12px; color:var(--dim); font-size:.9rem;"></div>
+                </section>
+
+                <section class="card">
+                    <div class="section-head">
+                        <div>
+                            <h2>Condivisioni ricevute</h2>
+                            <p>Qui arrivano piani menu, routine e sottoroutine inviati dalle tue connessioni.</p>
+                        </div>
+                        <button class="btn outline" onclick="loadShareInbox()">Aggiorna</button>
+                    </div>
+                    <div id="share-inbox-list" class="task-list"></div>
                 </section>
 
                 <section class="card">
@@ -320,7 +336,7 @@
     </div>
     <script src="config.js?v=routineos-config-1"></script>
 
-    <script src="script.js?v=routineos-api-2"></script>
+    <script src="script.js?v=routineos-api-3"></script>
     <script>
         let profileSocial = {
             nickname: '',
@@ -351,6 +367,8 @@
             ['share-menu', 'share-routines', 'share-sottoroutines'].forEach(id => {
                 document.getElementById(id).addEventListener('change', saveSocialProfile);
             });
+            toggleCustomRelation();
+            loadShareInbox();
         });
 
         function coverStyle(value) {
@@ -436,12 +454,16 @@
         async function saveSocialProfile() {
             const status = document.getElementById('profile-save-status');
             collectSocialProfile();
-            const res = await apiFetch(`${API}/profile/social`, {
-                method: 'PUT',
-                body: JSON.stringify({ social: profileSocial })
-            });
-            const data = await res.json();
-            status.textContent = res.ok ? 'Profilo salvato.' : (data.detail || 'Errore salvataggio profilo.');
+            try {
+                const res = await apiFetch(`${API}/profile/social`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ social: profileSocial })
+                });
+                const data = await res.json();
+                status.textContent = res.ok ? 'Profilo salvato.' : (data.detail || 'Errore salvataggio profilo.');
+            } catch (e) {
+                status.textContent = 'Errore di connessione durante il salvataggio del profilo.';
+            }
         }
 
         async function handlePhotoUpload(event) {
@@ -519,17 +541,29 @@
             document.getElementById('profile-save-status').textContent = 'Codice copiato.';
         }
 
+        function toggleCustomRelation() {
+            const select = document.getElementById('connection-relation');
+            const wrap = document.getElementById('custom-relation-wrap');
+            if (!select || !wrap) return;
+            wrap.style.display = select.value === 'Personalizzata' ? 'block' : 'none';
+        }
+
         function addConnection() {
             const name = document.getElementById('connection-name').value.trim();
             const code = document.getElementById('connection-code').value.trim();
-            const relation = document.getElementById('connection-relation').value;
+            const relationSelect = document.getElementById('connection-relation').value;
+            const customRelation = document.getElementById('connection-relation-custom').value.trim();
+            const relation = relationSelect === 'Personalizzata' ? (customRelation || 'Personalizzata') : relationSelect;
             const note = document.getElementById('connection-note').value.trim();
             if (!name && !code) return;
             profileSocial.connections = profileSocial.connections || [];
             profileSocial.connections.push({ id: `conn_${Date.now()}`, name: name || code, code, relation, note, status: 'Salvato' });
             document.getElementById('connection-name').value = '';
             document.getElementById('connection-code').value = '';
+            document.getElementById('connection-relation-custom').value = '';
             document.getElementById('connection-note').value = '';
+            document.getElementById('connection-relation').value = 'Amico';
+            toggleCustomRelation();
             renderConnections();
             saveSocialProfile();
         }
@@ -554,9 +588,87 @@
                         <div class="connection-meta">${escapeHTML(item.relation || 'Contatto')} - ${escapeHTML(item.code || 'nessun codice')} - ${escapeHTML(item.status || 'Salvato')}</div>
                         ${item.note ? `<div class="connection-meta">${escapeHTML(item.note)}</div>` : ''}
                     </div>
-                    <button class="btn danger" onclick="removeConnection('${item.id}')">Rimuovi</button>
+                    <span style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
+                        <button class="btn outline" onclick="shareWithConnection('${item.id}')">Condividi</button>
+                        <button class="btn danger" onclick="removeConnection('${item.id}')">Rimuovi</button>
+                    </span>
                 </div>
             `).join('');
+        }
+
+        async function buildShareData() {
+            if (typeof loadPortableData === 'function') await loadPortableData();
+            const data = {};
+            if (profileSocial.share_menu) data.piani = exportPortableData.piani || [];
+            if (profileSocial.share_routines) data.routine = exportPortableData.routine || [];
+            if (profileSocial.share_sottoroutines) data.sottoroutine = exportPortableData.sottoroutine || [];
+            return data;
+        }
+
+        async function shareWithConnection(id) {
+            const status = document.getElementById('connection-share-status');
+            const connection = (profileSocial.connections || []).find(item => item.id === id);
+            if (!connection || !connection.code) {
+                status.textContent = 'Aggiungi il codice RoutineOS della connessione prima di condividere.';
+                return;
+            }
+            if (!profileSocial.share_menu && !profileSocial.share_routines && !profileSocial.share_sottoroutines) {
+                status.textContent = 'Seleziona almeno una cosa da condividere: menu, routine o sottoroutine.';
+                return;
+            }
+            status.textContent = 'Preparo e invio la condivisione...';
+            try {
+                const payload = await buildShareData();
+                const res = await apiFetch(`${API}/share/send`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        target_code: connection.code,
+                        title: `Condivisione da ${profileSocial.nickname || userCode}`,
+                        data: payload
+                    })
+                });
+                const result = await res.json();
+                status.textContent = result.message || (res.ok ? 'Condivisione inviata.' : 'Errore durante la condivisione.');
+            } catch (e) {
+                status.textContent = 'Errore di connessione durante la condivisione.';
+            }
+        }
+
+        async function loadShareInbox() {
+            const list = document.getElementById('share-inbox-list');
+            if (!list) return;
+            list.innerHTML = '<p class="empty-state">Caricamento condivisioni...</p>';
+            try {
+                const res = await apiFetch(`${API}/share/inbox`);
+                const data = await res.json();
+                const items = data.items || [];
+                if (!items.length) {
+                    list.innerHTML = '<p class="empty-state">Nessuna condivisione ricevuta.</p>';
+                    return;
+                }
+                list.innerHTML = items.slice().reverse().map(item => {
+                    const counts = Object.entries(item.data || {})
+                        .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.length : 0}`)
+                        .join(' - ');
+                    return `
+                        <div class="connection-row">
+                            <div>
+                                <strong>${escapeHTML(item.title || 'Condivisione RoutineOS')}</strong>
+                                <div class="connection-meta">Da ${escapeHTML(item.from_code || '-')} - ${escapeHTML(item.created_at || '')}</div>
+                                <div class="connection-meta">${escapeHTML(counts || 'Dati condivisi')}</div>
+                            </div>
+                            <button class="btn danger" onclick="removeShareInboxItem('${item.id}')">Archivia</button>
+                        </div>
+                    `;
+                }).join('');
+            } catch (e) {
+                list.innerHTML = '<p class="empty-state">Non riesco a caricare le condivisioni.</p>';
+            }
+        }
+
+        async function removeShareInboxItem(id) {
+            await apiFetch(`${API}/share/inbox/${encodeURIComponent(id)}`, { method: 'DELETE' });
+            loadShareInbox();
         }
 
         async function deleteAccount() {
@@ -581,6 +693,7 @@
     </script>
 </body>
 </html>
+
 
 
 

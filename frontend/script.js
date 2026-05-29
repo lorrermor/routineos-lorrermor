@@ -54,6 +54,8 @@ function getStoredUserId() {
     return localStorage.getItem("pantrypro_user_id") || sessionStorage.getItem("pantrypro_user_id") || "local";
 }
 
+let refreshSessionPromise = null;
+
 function clearAuthSession() {
     ["pantrypro_token", "pantrypro_refresh", "pantrypro_user_id", "pantrypro_email"].forEach(key => {
         localStorage.removeItem(key);
@@ -76,6 +78,14 @@ function logout() {
 }
 
 async function refreshSession() {
+    if (refreshSessionPromise) return refreshSessionPromise;
+    refreshSessionPromise = refreshSessionOnce().finally(() => {
+        refreshSessionPromise = null;
+    });
+    return refreshSessionPromise;
+}
+
+async function refreshSessionOnce() {
     const refreshToken = getRefreshToken();
     if (!refreshToken) return false;
     try {
@@ -116,6 +126,9 @@ async function apiFetch(url, options = {}, retry = true) {
 
     const res = await fetch(url, { ...options, headers });
     if (res.status === 401) {
+        if (retry && token && getAuthToken() && getAuthToken() !== token) {
+            return apiFetch(url, options, false);
+        }
         if (retry && await refreshSession()) {
             return apiFetch(url, options, false);
         }
@@ -126,6 +139,10 @@ async function apiFetch(url, options = {}, retry = true) {
 }
 
 const giorniSettimana = ["Lunedi", "Martedi", "Mercoledi", "Giovedi", "Venerdi", "Sabato", "Domenica"];
+
+function nomeGiornoSettimana(data = new Date()) {
+    return giorniSettimana[(data.getDay() + 6) % 7];
+}
 
 let currentPlan = { nome: "", inizio: "", fine: "", pasti: [] };
 
@@ -138,6 +155,7 @@ let mappaUnitaInventario = {};
 document.addEventListener('DOMContentLoaded', async () => {
     if (!requireLogin()) return;
 
+    initMobileSideMenu();
     await ensureFreshSession();
     await syncUserLocalData();
     renderSheetsNav();
@@ -199,6 +217,37 @@ document.addEventListener('DOMContentLoaded', async () => {
         caricaCronologia();
     }
 });
+
+function initMobileSideMenu() {
+    const sideMenu = document.querySelector(".side-menu");
+    if (!sideMenu || document.querySelector(".mobile-menu-toggle")) return;
+
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "mobile-menu-toggle";
+    toggle.setAttribute("aria-label", "Apri menu");
+    toggle.innerHTML = "<span>☰</span><span>Menu</span>";
+
+    const backdrop = document.createElement("div");
+    backdrop.className = "mobile-menu-backdrop";
+
+    function closeMenu() {
+        document.body.classList.remove("side-menu-open");
+        toggle.setAttribute("aria-label", "Apri menu");
+    }
+
+    toggle.addEventListener("click", () => {
+        const open = document.body.classList.toggle("side-menu-open");
+        toggle.setAttribute("aria-label", open ? "Chiudi menu" : "Apri menu");
+    });
+    backdrop.addEventListener("click", closeMenu);
+    sideMenu.addEventListener("click", event => {
+        if (event.target.closest("a, button")) closeMenu();
+    });
+
+    document.body.prepend(backdrop);
+    document.body.prepend(toggle);
+}
 
 window.addEventListener('pageshow', () => {
     if (getAuthToken()) renderSheetsNav();
@@ -656,6 +705,8 @@ async function jsonOrThrow(res, label) {
 
 function isRoutineDue(item, oggi = new Date()) {
     if (!inIntervallo(oggi, item.inizio, item.fine)) return false;
+    const excludedDays = item.giorni_esclusi || item.exclude_days || [];
+    if (Array.isArray(excludedDays) && excludedDays.includes(nomeGiornoSettimana(oggi))) return false;
 
     const frequenza = (item.frequenza || "giornaliera").toLowerCase();
     if (frequenza === "giornaliera") return true;
@@ -1616,6 +1667,7 @@ function selectedPortableData() {
 
 function portablePackage(data) {
     return {
+        routineos_export: true,
         pantrypro_export: true,
         version: 1,
         exported_at: new Date().toISOString(),
@@ -1646,11 +1698,11 @@ function exportSelectedData(format) {
     const date = localISODate();
     const pack = portablePackage(data);
     if (format === "json") {
-        downloadTextFile(`pantrypro_export_${date}.json`, JSON.stringify(pack, null, 2), "application/json;charset=utf-8");
+        downloadTextFile(`routineos_export_${date}.json`, JSON.stringify(pack, null, 2), "application/json;charset=utf-8");
     } else if (format === "csv") {
-        downloadTextFile(`pantrypro_export_${date}.csv`, portableDataToCsv(data), "text/csv;charset=utf-8");
+        downloadTextFile(`routineos_export_${date}.csv`, portableDataToCsv(data), "text/csv;charset=utf-8");
     } else if (format === "excel") {
-        downloadTextFile(`pantrypro_export_${date}.xls`, portableDataToExcelHtml(data), "application/vnd.ms-excel;charset=utf-8");
+        downloadTextFile(`routineos_export_${date}.xls`, portableDataToExcelHtml(data), "application/vnd.ms-excel;charset=utf-8");
     } else if (format === "pdf") {
         openPortablePdf(pack);
     }
@@ -1903,7 +1955,7 @@ function parsePortableImport(text, filename) {
     const lower = filename.toLowerCase();
     if (lower.endsWith(".json")) {
         const parsed = JSON.parse(text);
-        return parsed.pantrypro_export ? parsed.data : parsed;
+        return (parsed.routineos_export || parsed.pantrypro_export) ? parsed.data : parsed;
     }
     if (lower.endsWith(".csv")) {
         return portableFromRows(parseCsv(text));
@@ -3667,6 +3719,7 @@ function pasteDishByIndex(pastoIndex, piattoIndex) {
     pasto.piatti[piattoIndex] = JSON.parse(JSON.stringify(plannerClipboard.piatto));
     renderGiorni();
 }
+
 
 
 

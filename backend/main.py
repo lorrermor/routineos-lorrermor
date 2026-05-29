@@ -247,6 +247,42 @@ def save_profile_data(user_id: str, token: str, profile_data: dict):
     }, token)
 
 
+def normalize_user_code(value: str) -> str:
+    cleaned = (value or "").strip().upper().replace(" ", "")
+    if cleaned and not cleaned.startswith("RO-"):
+        cleaned = f"RO-{cleaned}"
+    return cleaned
+
+
+def share_config_key(user_code: str) -> str:
+    code = normalize_user_code(user_code)
+    if not code or len(code) < 5:
+        raise HTTPException(status_code=400, detail="Codice utente non valido.")
+    return f"share_inbox:{code}"
+
+
+def read_share_inbox_by_code(user_code: str) -> list:
+    key = share_config_key(user_code)
+    rows = supabase.table("config").select("valore").eq("chiave", key).execute().data or []
+    if not rows:
+        return []
+    try:
+        data = json.loads(rows[0].get("valore") or "[]")
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
+def save_share_inbox_by_code(user_code: str, items: list, owner_user_id: str):
+    key = share_config_key(user_code)
+    supabase.table("config").delete().eq("chiave", key).execute()
+    supabase.table("config").insert({
+        "chiave": key,
+        "valore": json.dumps(items[-50:]),
+        "user_id": owner_user_id
+    }).execute()
+
+
 def update_supabase_user(token: str, payload: dict):
     response = httpx.put(
         f"{URL_SB}/auth/v1/user",
@@ -422,7 +458,7 @@ async def get_profile(authorization: str = Header(None), user_id: str = Depends(
             "user_id": user_id,
             "email": user.email if user else "",
             "created_at": str(getattr(user, "created_at", "") or ""),
-            "user_code": f"PP-{user_id[:8].upper()}",
+            "user_code": f"RO-{user_id[:8].upper()}",
             "social": social
         }
     except Exception as e:
@@ -484,6 +520,44 @@ async def update_profile_password(data: dict, authorization: str = Header(None),
     return {"status": "success", "message": "Password aggiornata correttamente. La prossima volta potrai accedere con quella nuova."}
 
 
+@app.get("/share/inbox")
+async def get_share_inbox(user_id: str = Depends(get_user_id)):
+    user_code = f"RO-{user_id[:8].upper()}"
+    return {"status": "success", "items": read_share_inbox_by_code(user_code)}
+
+
+@app.post("/share/send")
+async def send_share(data: dict, user_id: str = Depends(get_user_id)):
+    target_code = normalize_user_code(data.get("target_code") or "")
+    if not target_code:
+        raise HTTPException(status_code=400, detail="Inserisci il codice RoutineOS della connessione.")
+
+    payload = data.get("data") or {}
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Dati condivisione non validi.")
+
+    item = {
+        "id": f"share_{int(datetime.now().timestamp() * 1000)}",
+        "from_user_id": user_id,
+        "from_code": f"RO-{user_id[:8].upper()}",
+        "title": (data.get("title") or "Condivisione RoutineOS").strip()[:120],
+        "data": payload,
+        "created_at": datetime.now().isoformat(timespec="seconds")
+    }
+    inbox = read_share_inbox_by_code(target_code)
+    inbox.append(item)
+    save_share_inbox_by_code(target_code, inbox, user_id)
+    return {"status": "success", "message": "Condivisione inviata.", "share": item}
+
+
+@app.delete("/share/inbox/{share_id}")
+async def delete_share_inbox_item(share_id: str, user_id: str = Depends(get_user_id)):
+    user_code = f"RO-{user_id[:8].upper()}"
+    inbox = [item for item in read_share_inbox_by_code(user_code) if item.get("id") != share_id]
+    save_share_inbox_by_code(user_code, inbox, user_id)
+    return {"status": "success"}
+
+
 @app.get("/config/item/{key}")
 async def get_user_config_item(key: str, authorization: str = Header(None), user_id: str = Depends(get_user_id)):
     token = get_auth_token(authorization)
@@ -529,7 +603,7 @@ async def delete_user_config_item(key: str, authorization: str = Header(None), u
 
 @app.delete("/profile/delete-account")
 async def delete_account(user_id: str = Depends(get_user_id)):
-    """Cancella i dati PantryPro dell'utente e, se possibile, anche l'utente Auth."""
+    """Cancella i dati RoutineOS dell'utente e, se possibile, anche l'utente Auth."""
     tables = [
         "completamenti",
         "logs",
@@ -563,7 +637,7 @@ async def delete_account(user_id: str = Depends(get_user_id)):
     return {
         "status": status,
         "auth_deleted": auth_deleted,
-        "message": "Account eliminato completamente, inclusi login Supabase e dati PantryPro." if auth_deleted else "Dati PantryPro cancellati, ma il login Supabase non e stato eliminato. L'email resta occupata finche non configuri SUPABASE_SERVICE_ROLE_KEY e ripeti l'eliminazione.",
+        "message": "Account eliminato completamente, inclusi login Supabase e dati RoutineOS." if auth_deleted else "Dati RoutineOS cancellati, ma il login Supabase non e stato eliminato. L'email resta occupata finche non configuri SUPABASE_SERVICE_ROLE_KEY e ripeti l'eliminazione.",
         "errors": errors
     }
 
@@ -849,7 +923,7 @@ async def ai_menu_plan(data: dict, user_id: str = Depends(get_user_id)):
     }
 
     prompt = f"""
-Sei l'assistente AI di PantryPro. Genera piani menu in italiano seguendo la richiesta utente.
+Sei l'assistente AI di RoutineOS. Genera piani menu in italiano seguendo la richiesta utente.
 Devi rispondere SOLO con JSON valido, senza markdown.
 
 Richiesta utente:
@@ -867,7 +941,7 @@ Inventario disponibile, formato JSON:
 Regole:
 - Se l'inventario e vuoto o insufficiente, proponi anche inventory_suggestions.
 - Usa nomi ingredienti normalizzati con underscore nel campo nome.
-- I piani devono essere compatibili con PantryPro: nome, inizio, fine, pasti, piatti, ingredienti.
+- I piani devono essere compatibili con RoutineOS: nome, inizio, fine, pasti, piatti, ingredienti.
 - Rispetta diete, stagionalita, esclusioni e preferenze indicate dall'utente.
 - Se la richiesta e mensile o stagionale, genera il numero di giorni richiesto fino al limite dato.
 - Non dare consigli medici: se serve, aggiungi una nota prudente.
