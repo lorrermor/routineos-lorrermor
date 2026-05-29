@@ -3019,6 +3019,7 @@ function finalSave(isDuplicate) {
 
 
 // --- 4. RENDERER PLANNER (CON TASTO X) ---
+let plannerMoveSelection = null;
 
 function moveArrayItem(list, from, to) {
     if (!Array.isArray(list) || from === to || from < 0 || to < 0 || from >= list.length || to >= list.length) return;
@@ -3027,8 +3028,16 @@ function moveArrayItem(list, from, to) {
 }
 
 function startPlannerDrag(event, payload) {
+    plannerMoveSelection = payload;
     event.dataTransfer.setData("application/json", JSON.stringify(payload));
     event.dataTransfer.effectAllowed = "move";
+}
+
+function selectPlannerMove(event, payload) {
+    event.preventDefault();
+    event.stopPropagation();
+    plannerMoveSelection = payload;
+    renderGiorni();
 }
 
 function readPlannerDrag(event) {
@@ -3042,7 +3051,28 @@ function readPlannerDrag(event) {
 function dropMeal(event, giorno, toIndex) {
     event.preventDefault();
     const payload = readPlannerDrag(event);
-    if (payload.type !== "meal") return;
+    movePlannerSelection(payload, { type: "meal", giorno, toIndex });
+}
+
+function movePlannerSelection(payload, target) {
+    if (!payload || !payload.type) return;
+    if (payload.type === "meal") {
+        if (target.type !== "meal") return;
+        movePlannerMeal(payload, target.giorno, target.toIndex);
+        return;
+    }
+    if (payload.type === "dish") {
+        if (target.type !== "dish") return;
+        movePlannerDish(payload, target.pIdx, target.toIndex);
+        return;
+    }
+    if (payload.type === "ingredient") {
+        if (target.type !== "ingredient") return;
+        movePlannerIngredient(payload, target.pIdx, target.ptIdx, target.toIndex);
+    }
+}
+
+function movePlannerMeal(payload, giorno, toIndex) {
     const fromIndex = Number.isInteger(payload.pIdx) ? payload.pIdx : currentPlan.pasti
         .map((pasto, index) => ({ pasto, index }))
         .filter(entry => entry.pasto.giorno === payload.giorno)[payload.dayIndex]?.index;
@@ -3054,33 +3084,55 @@ function dropMeal(event, giorno, toIndex) {
         .filter(entry => entry.pasto.giorno === giorno);
     const targetIndex = dayEntriesAfter[toIndex]?.index ?? currentPlan.pasti.length;
     currentPlan.pasti.splice(targetIndex, 0, item);
+    plannerMoveSelection = null;
     renderGiorni();
 }
 
 function dropDish(event, pIdx, toIndex) {
     event.preventDefault();
     const payload = readPlannerDrag(event);
-    if (payload.type !== "dish") return;
+    movePlannerSelection(payload, { type: "dish", pIdx, toIndex });
+}
+
+function movePlannerDish(payload, pIdx, toIndex) {
     const source = currentPlan.pasti[payload.pIdx]?.piatti;
     const target = currentPlan.pasti[pIdx]?.piatti;
     if (!source || !target || !source[payload.index]) return;
     const [item] = source.splice(payload.index, 1);
     const insertAt = Math.max(0, Math.min(toIndex, target.length));
     target.splice(insertAt, 0, item);
+    plannerMoveSelection = null;
     renderGiorni();
 }
 
 function dropIngredient(event, pIdx, ptIdx, toIndex) {
     event.preventDefault();
     const payload = readPlannerDrag(event);
-    if (payload.type !== "ingredient") return;
+    movePlannerSelection(payload, { type: "ingredient", pIdx, ptIdx, toIndex });
+}
+
+function movePlannerIngredient(payload, pIdx, ptIdx, toIndex) {
     const source = currentPlan.pasti[payload.pIdx]?.piatti?.[payload.ptIdx]?.ingredienti;
     const target = currentPlan.pasti[pIdx]?.piatti?.[ptIdx]?.ingredienti;
     if (!source || !target || !source[payload.index]) return;
     const [item] = source.splice(payload.index, 1);
     const insertAt = Math.max(0, Math.min(toIndex, target.length));
     target.splice(insertAt, 0, item);
+    plannerMoveSelection = null;
     renderGiorni();
+}
+
+function dropPlannerSelection(event, type, pIdx = null, ptIdx = null, toIndex = null, giorno = "") {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!plannerMoveSelection) return;
+    const target = { type, pIdx, ptIdx, toIndex, giorno };
+    movePlannerSelection(plannerMoveSelection, target);
+}
+
+function plannerDropButton(type, pIdx = null, ptIdx = null, toIndex = null, giorno = "") {
+    if (!plannerMoveSelection || plannerMoveSelection.type !== type) return "";
+    return `<button class="planner-drop-btn" onclick="dropPlannerSelection(event, '${type}', ${pIdx === null ? 'null' : pIdx}, ${ptIdx === null ? 'null' : ptIdx}, ${toIndex === null ? 'null' : toIndex}, '${escapeHTML(giorno)}')">Qui</button>`;
 }
 
 function renderGiorni() {
@@ -3115,8 +3167,9 @@ function renderGiorni() {
         pDiv.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                 <div style="display:flex; align-items:center; gap:8px;">
-                    <span class="drag-handle" draggable="true" ondragstart="startPlannerDrag(event, {type:'meal', pIdx:${pIdx}, giorno:'${pasto.giorno}', dayIndex:${dayIndex}})" title="Trascina pasto">::</span>
+                    <span class="drag-handle" draggable="true" onclick="selectPlannerMove(event, {type:'meal', pIdx:${pIdx}, giorno:'${pasto.giorno}', dayIndex:${dayIndex}})" ondragstart="startPlannerDrag(event, {type:'meal', pIdx:${pIdx}, giorno:'${pasto.giorno}', dayIndex:${dayIndex}})" title="Trascina pasto">::</span>
                     <input type="text" value="${escapeHTML(pasto.nome || "")}" onchange="currentPlan.pasti[${pIdx}].nome=this.value" style="font-weight:bold; color:var(--accent); background:transparent; border:none; border-bottom:1px solid #444;">
+                    ${plannerDropButton('meal', null, null, dayIndex, pasto.giorno)}
                     <button class="btn-cp" onclick="copyMealByIndex(${pIdx})" title="Copia Pasto">Copia</button>
                     <button class="btn-cp" onclick="pasteMealByIndex(${pIdx})" title="Incolla Pasto">Incolla</button>
                 </div>
@@ -3138,15 +3191,17 @@ function renderGiorni() {
             ptDiv.innerHTML = `
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
                     <div style="display:flex; align-items:center; gap:5px; width:85%;">
-                        <span class="drag-handle" draggable="true" ondragstart="startPlannerDrag(event, {type:'dish', pIdx:${pIdx}, index:${ptIdx}})" title="Trascina piatto">::</span>
+                        <span class="drag-handle" draggable="true" onclick="selectPlannerMove(event, {type:'dish', pIdx:${pIdx}, index:${ptIdx}})" ondragstart="startPlannerDrag(event, {type:'dish', pIdx:${pIdx}, index:${ptIdx}})" title="Trascina piatto">::</span>
                     <input type="text" value="${escapeHTML(piatto.nome || "")}" onchange="currentPlan.pasti[${pIdx}].piatti[${ptIdx}].nome=this.value" style="background:#fff; color:#111827; border:1px solid #cbd5e1; width:70%; font-size:0.9rem; border-radius:8px;">
+                        ${plannerDropButton('dish', pIdx, null, ptIdx)}
                         <button class="btn-cp" style="font-size:10px; padding:1px 4px;" onclick="copyDishByIndex(${pIdx}, ${ptIdx})" title="Copia Piatto">Copia</button>
                         <button class="btn-cp" style="font-size:10px; padding:1px 4px;" onclick="pasteDishByIndex(${pIdx}, ${ptIdx})" title="Sovrascrivi Piatto">Incolla</button>
                     </div>
                     <button class="btn-del" onclick="currentPlan.pasti[${pIdx}].piatti.splice(${ptIdx},1); renderGiorni();" style="font-size:10px;">X</button>
                 </div>
                 <div id="ings-${pIdx}-${ptIdx}"></div>
-                <button class="btn outline" onclick="addIng(${pIdx}, ${ptIdx})" style="font-size:0.6rem; padding: 2px 5px; margin-top:5px;">+ Ingrediente</button>`;
+                <button class="btn outline" onclick="addIng(${pIdx}, ${ptIdx})" style="font-size:0.6rem; padding: 2px 5px; margin-top:5px;">+ Ingrediente</button>
+                ${plannerDropButton('ingredient', pIdx, ptIdx, piatto.ingredienti.length)}`;
             document.getElementById(`piatti-${pIdx}`).appendChild(ptDiv);
 
             // RENDER INGREDIENTI
@@ -3160,11 +3215,12 @@ function renderGiorni() {
                 iRow.setAttribute('ondragover', 'event.preventDefault()');
                 iRow.setAttribute('ondrop', `dropIngredient(event, ${pIdx}, ${ptIdx}, ${iIdx})`);
                 iRow.innerHTML = `
-                    <span class="drag-handle" draggable="true" ondragstart="startPlannerDrag(event, {type:'ingredient', pIdx:${pIdx}, ptIdx:${ptIdx}, index:${iIdx}})" title="Trascina ingrediente">::</span>
+                    <span class="drag-handle" draggable="true" onclick="selectPlannerMove(event, {type:'ingredient', pIdx:${pIdx}, ptIdx:${ptIdx}, index:${iIdx}})" ondragstart="startPlannerDrag(event, {type:'ingredient', pIdx:${pIdx}, ptIdx:${ptIdx}, index:${iIdx}})" title="Trascina ingrediente">::</span>
                     <input class="planner-ingredient-input ${isInv ? 'is-linked' : 'is-unlinked'}" type="text" value="${escapeHTML(String(ing.nome || "").replace(/_/g, ' '))}" list="lista-ingredienti-inventario" onchange="aggiornaIng(${pIdx}, ${ptIdx}, ${iIdx}, this.value)" title="${isInv ? 'Collegato all inventario' : 'Non collegato all inventario'}">
                     <input type="number" step="0.1" value="${escapeHTML(ing.qta || 0)}" onchange="currentPlan.pasti[${pIdx}].piatti[${ptIdx}].ingredienti[${iIdx}].qta=this.value" style="font-size:0.8rem;">
                     <span style="font-size:0.7rem; color:var(--dim); align-self:center;">${escapeHTML(unita)}</span>
                     <span class="planner-ingredient-badge ${isInv ? 'is-linked' : 'is-unlinked'}">${isInv ? 'Inventario' : 'Extra'}</span>
+                    ${plannerDropButton('ingredient', pIdx, ptIdx, iIdx)}
                     <button class="btn-del" onclick="currentPlan.pasti[${pIdx}].piatti[${ptIdx}].ingredienti.splice(${iIdx},1); renderGiorni();" style="width:20px; height:20px; font-size:10px;">X</button>`;
                 document.getElementById(`ings-${pIdx}-${ptIdx}`).appendChild(iRow);
             });

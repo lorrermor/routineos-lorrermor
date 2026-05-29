@@ -132,7 +132,7 @@
     </div>
     <script src="config.js?v=routineos-config-1"></script>
 
-    <script src="script.js?v=routineos-api-4"></script>
+    <script src="script.js?v=routineos-api-5"></script>
     <script>
         (function () {
             function key() { return `pantrypro_sheets:${localStorage.getItem("pantrypro_user_id") || "local"}`; }
@@ -281,7 +281,7 @@
         function renderRoutineItems() {
             const container = document.getElementById('routine-items');
             container.innerHTML = routineItems.map((item, index) => `
-                <div class="editor-row drag-drop-target" ondragover="event.preventDefault()" ondrop="dropRoutineItem(event, ${index})" style="grid-template-columns: 34px 110px minmax(0, 1fr) 42px;">
+                <div class="editor-row routine-editor-row drag-drop-target" ondragover="event.preventDefault()" ondrop="dropRoutineItem(event, ${index})" style="grid-template-columns: 34px 88px minmax(0, 1fr) 42px;">
                     <span class="drag-handle" draggable="true" ondragstart="startRoutineDrag(event, ${index})" title="Trascina">::</span>
                     <input type="time" value="${escapeHTML(item.orario || '')}" onchange="routineItems[${index}].orario=this.value">
                     <input value="${escapeHTML(item.titolo)}" placeholder="Es: bere acqua, meditazione, pulizia cucina" onchange="routineItems[${index}].titolo=this.value">
@@ -342,11 +342,14 @@
                 return;
             }
             container.innerHTML = details.map(item => `
-                <div class="task-row" style="grid-template-columns:32px minmax(0, 1fr) auto;">
+                <div class="task-row saved-routine-row">
                     <span></span>
                     <span>
                         <span class="task-title">${escapeHTML(item.nome)}</span>
-                        <span class="task-meta">${escapeHTML(item.frequenza)} - ${escapeHTML(item.inizio)} / ${escapeHTML(item.fine)}</span>
+                        <span class="task-meta routine-date-meta">
+                            <span>${escapeHTML(item.frequenza)}</span>
+                            <span>${escapeHTML(item.inizio)} / ${escapeHTML(item.fine)}</span>
+                        </span>
                     </span>
                     <span style="display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;">
                         <button class="btn outline" onclick="editRoutine('${safeEncoded(item.nome)}')">Modifica</button>
@@ -358,6 +361,7 @@
     </script>
 </body>
 </html>
+
 
 
 

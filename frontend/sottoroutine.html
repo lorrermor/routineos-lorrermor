@@ -92,7 +92,7 @@
     </div>
     <script src="config.js?v=routineos-config-1"></script>
 
-    <script src="script.js?v=routineos-api-4"></script>
+    <script src="script.js?v=routineos-api-5"></script>
     <script>
         (function () {
             function key() { return `pantrypro_sheets:${localStorage.getItem("pantrypro_user_id") || "local"}`; }
@@ -245,7 +245,7 @@
         function renderSubItems() {
             const container = document.getElementById('sub-items');
             container.innerHTML = subItems.map((item, index) => `
-                <div class="editor-row drag-drop-target" ondragover="event.preventDefault()" ondrop="dropSubItem(event, ${index})" style="grid-template-columns: 34px 110px minmax(0, 1fr) 180px 42px;">
+                <div class="editor-row subroutine-editor-row drag-drop-target" ondragover="event.preventDefault()" ondrop="dropSubItem(event, ${index})" style="grid-template-columns: 34px 82px minmax(0, 1fr) 160px 42px;">
                     <span class="drag-handle" draggable="true" ondragstart="startSubDrag(event, ${index})" title="Trascina">::</span>
                     <input type="time" value="${escapeHTML(item.orario || '')}" onchange="subItems[${index}].orario=this.value">
                     <input value="${escapeHTML(item.titolo)}" placeholder="Es: squat, stretching, serie addominali" onchange="subItems[${index}].titolo=this.value">
@@ -307,11 +307,14 @@
                 return;
             }
             container.innerHTML = details.map(item => `
-                <div class="task-row" style="grid-template-columns:32px minmax(0, 1fr) auto;">
+                <div class="task-row saved-routine-row">
                     <span></span>
                     <span>
                         <span class="task-title">${escapeHTML(item.nome)}</span>
-                        <span class="task-meta">${escapeHTML(item.routine_parent || 'Senza routine principale')} - ${escapeHTML(item.frequenza)}</span>
+                        <span class="task-meta routine-date-meta">
+                            <span>${escapeHTML(item.routine_parent || 'Senza routine principale')}</span>
+                            <span>${escapeHTML(item.frequenza)}</span>
+                        </span>
                     </span>
                     <span style="display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;">
                         <button class="btn outline" onclick="editSubroutine('${safeEncoded(item.nome)}')">Modifica</button>
@@ -323,6 +326,7 @@
     </script>
 </body>
 </html>
+
 
 
 

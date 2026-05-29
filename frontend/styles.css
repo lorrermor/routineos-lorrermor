@@ -1833,6 +1833,32 @@ datalist option {
   color: #92400e;
 }
 
+.planner-drop-btn {
+  border: 1px solid #60a5fa;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 0.7rem;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.saved-routine-row {
+  grid-template-columns: 20px minmax(0, 1fr) auto !important;
+}
+
+.routine-date-meta {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.routine-date-meta span {
+  min-width: 0;
+}
+
 .mobile-menu-toggle,
 .mobile-menu-backdrop {
   display: none;
@@ -1972,6 +1998,11 @@ datalist option {
     white-space: nowrap;
   }
 
+  .planner-drop-btn {
+    padding: 4px 7px;
+    font-size: 0.64rem;
+  }
+
   .planner-ingredient-row input[type="number"] {
     min-width: 0;
     width: 100% !important;
@@ -2008,12 +2039,44 @@ datalist option {
   }
 
   .routineos-page .editor-row {
-    grid-template-columns: 22px 92px minmax(0, 1fr) 36px !important;
+    grid-template-columns: 22px 76px minmax(0, 1fr) 36px !important;
     gap: 6px !important;
   }
 
   .routineos-page .editor-row .drag-handle {
     width: 22px;
     min-width: 22px;
+  }
+
+  .routineos-page .subroutine-editor-row {
+    grid-template-columns: 22px 72px minmax(0, 1fr) 36px !important;
+  }
+
+  .routineos-page .subroutine-editor-row select {
+    grid-column: 2 / 4;
+  }
+
+  .routineos-page .saved-routine-row {
+    grid-template-columns: 1fr !important;
+    align-items: stretch;
+  }
+
+  .routineos-page .saved-routine-row > span:first-child {
+    display: none;
+  }
+
+  .routineos-page .saved-routine-row > span:last-child {
+    justify-content: stretch !important;
+  }
+
+  .routineos-page .saved-routine-row .btn {
+    flex: 1 1 120px;
+  }
+
+  .routine-date-meta {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 3px;
+    word-break: break-word;
   }
 }
