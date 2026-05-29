@@ -1875,11 +1875,11 @@ datalist option {
 }
 
 .routine-editor-row {
-  grid-template-columns: 30px 64px minmax(220px, 1fr) auto 38px !important;
+  grid-template-columns: 30px 74px minmax(220px, 1fr) auto 38px !important;
 }
 
 .subroutine-editor-row {
-  grid-template-columns: 30px 60px minmax(220px, 1fr) 142px auto 38px !important;
+  grid-template-columns: 30px 74px minmax(220px, 1fr) 142px auto 38px !important;
 }
 
 .mobile-menu-toggle,
@@ -2069,7 +2069,7 @@ datalist option {
   }
 
   .routineos-page .editor-row {
-    grid-template-columns: 18px 48px minmax(0, 1fr) 30px !important;
+    grid-template-columns: 18px 58px minmax(0, 1fr) 30px !important;
     gap: 6px !important;
   }
 
@@ -2080,7 +2080,7 @@ datalist option {
   }
 
   .routineos-page .subroutine-editor-row {
-    grid-template-columns: 18px 48px minmax(0, 1fr) 30px !important;
+    grid-template-columns: 18px 58px minmax(0, 1fr) 30px !important;
   }
 
   .routineos-page .subroutine-editor-row select {
@@ -2090,7 +2090,7 @@ datalist option {
   }
 
   .routineos-page .activity-time-input {
-    font-size: 0.68rem;
+    font-size: 0.7rem;
     padding-left: 2px;
     padding-right: 1px;
   }
@@ -2106,6 +2106,12 @@ datalist option {
     justify-self: start;
     padding: 3px 6px;
     font-size: 0.62rem;
+  }
+
+  .routineos-page .subroutine-editor-row .routine-drop-btn {
+    grid-column: 1 / 2;
+    grid-row: 2;
+    justify-self: start;
   }
 
   .routineos-page .saved-routine-row {
