@@ -92,7 +92,7 @@
     </div>
     <script src="config.js?v=routineos-config-1"></script>
 
-    <script src="script.js?v=routineos-api-6"></script>
+    <script src="script.js?v=routineos-api-7"></script>
     <script>
         (function () {
             function key() { return `pantrypro_sheets:${localStorage.getItem("pantrypro_user_id") || "local"}`; }
@@ -266,10 +266,10 @@
         function renderSubItems() {
             const container = document.getElementById('sub-items');
             container.innerHTML = subItems.map((item, index) => `
-                <div class="editor-row subroutine-editor-row drag-drop-target" ondragover="event.preventDefault()" ondrop="dropSubItem(event, ${index})" style="grid-template-columns: 30px 70px minmax(0, 1fr) 142px auto 38px;">
+                <div class="editor-row subroutine-editor-row drag-drop-target" ondragover="event.preventDefault()" ondrop="dropSubItem(event, ${index})">
                     <span class="drag-handle" draggable="true" onclick="selectSubMove(event, ${index})" ondragstart="startSubDrag(event, ${index})" title="Trascina">::</span>
                     <input class="activity-time-input" type="time" value="${escapeHTML(item.orario || '')}" onchange="subItems[${index}].orario=this.value">
-                    <input value="${escapeHTML(item.titolo)}" placeholder="Es: squat, stretching, serie addominali" onchange="subItems[${index}].titolo=this.value">
+                    <input class="activity-title-input" value="${escapeHTML(item.titolo)}" placeholder="Es: squat, stretching, serie addominali" onchange="subItems[${index}].titolo=this.value">
                     <select onchange="subItems[${index}].giorno_settimana=this.value">
                         <option value="" ${item.giorno_settimana === '' ? 'selected' : ''}>Ogni giorno dovuto</option>
                         <option value="1" ${item.giorno_settimana === '1' ? 'selected' : ''}>Lunedi</option>
@@ -348,6 +348,7 @@
     </script>
 </body>
 </html>
+
 
 
 

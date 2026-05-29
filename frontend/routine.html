@@ -132,7 +132,7 @@
     </div>
     <script src="config.js?v=routineos-config-1"></script>
 
-    <script src="script.js?v=routineos-api-6"></script>
+    <script src="script.js?v=routineos-api-7"></script>
     <script>
         (function () {
             function key() { return `pantrypro_sheets:${localStorage.getItem("pantrypro_user_id") || "local"}`; }
@@ -302,10 +302,10 @@
         function renderRoutineItems() {
             const container = document.getElementById('routine-items');
             container.innerHTML = routineItems.map((item, index) => `
-                <div class="editor-row routine-editor-row drag-drop-target" ondragover="event.preventDefault()" ondrop="dropRoutineItem(event, ${index})" style="grid-template-columns: 30px 74px minmax(0, 1fr) auto 38px;">
+                <div class="editor-row routine-editor-row drag-drop-target" ondragover="event.preventDefault()" ondrop="dropRoutineItem(event, ${index})">
                     <span class="drag-handle" draggable="true" onclick="selectRoutineMove(event, ${index})" ondragstart="startRoutineDrag(event, ${index})" title="Trascina">::</span>
                     <input class="activity-time-input" type="time" value="${escapeHTML(item.orario || '')}" onchange="routineItems[${index}].orario=this.value">
-                    <input value="${escapeHTML(item.titolo)}" placeholder="Es: bere acqua, meditazione, pulizia cucina" onchange="routineItems[${index}].titolo=this.value">
+                    <input class="activity-title-input" value="${escapeHTML(item.titolo)}" placeholder="Es: bere acqua, meditazione, pulizia cucina" onchange="routineItems[${index}].titolo=this.value">
                     ${routineDropButton(index)}
                     <button class="btn danger" onclick="removeRoutineItem(${index})">X</button>
                 </div>
@@ -383,6 +383,7 @@
     </script>
 </body>
 </html>
+
 
 
 

@@ -907,6 +907,9 @@ td { padding: 12px; border-bottom: 1px solid #334155; }
   color: var(--dim);
   cursor: grab;
   user-select: none;
+  touch-action: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: element;
 }
 
 .drag-handle:active {
@@ -1866,6 +1869,19 @@ datalist option {
   padding-right: 4px;
 }
 
+.activity-title-input {
+  min-width: 0;
+  width: 100%;
+}
+
+.routine-editor-row {
+  grid-template-columns: 30px 64px minmax(220px, 1fr) auto 38px !important;
+}
+
+.subroutine-editor-row {
+  grid-template-columns: 30px 60px minmax(220px, 1fr) 142px auto 38px !important;
+}
+
 .mobile-menu-toggle,
 .mobile-menu-backdrop {
   display: none;
@@ -1890,7 +1906,7 @@ datalist option {
   .mobile-menu-toggle {
     display: inline-flex;
     position: fixed;
-    left: 14px;
+    left: 12px;
     top: 14px;
     z-index: 1200;
     align-items: center;
@@ -1928,6 +1944,13 @@ datalist option {
     border-radius: 0 14px 14px 0;
     transform: translateX(-105%);
     transition: transform 0.22s ease;
+  }
+
+  .side-menu::before {
+    justify-content: flex-end;
+    padding-left: 68px;
+    padding-right: 8px;
+    text-align: right;
   }
 
   body.side-menu-open .side-menu {
@@ -2046,31 +2069,41 @@ datalist option {
   }
 
   .routineos-page .editor-row {
-    grid-template-columns: 22px 62px minmax(0, 1fr) auto 36px !important;
+    grid-template-columns: 18px 48px minmax(0, 1fr) 30px !important;
     gap: 6px !important;
   }
 
   .routineos-page .editor-row .drag-handle {
-    width: 22px;
-    min-width: 22px;
+    width: 18px;
+    min-width: 18px;
+    height: 32px;
   }
 
   .routineos-page .subroutine-editor-row {
-    grid-template-columns: 22px 60px minmax(0, 1fr) auto 36px !important;
+    grid-template-columns: 18px 48px minmax(0, 1fr) 30px !important;
   }
 
   .routineos-page .subroutine-editor-row select {
-    grid-column: 3 / 5;
+    grid-column: 2 / 4;
+    grid-row: 2;
     min-width: 0;
   }
 
   .routineos-page .activity-time-input {
-    font-size: 0.72rem;
-    padding-left: 3px;
-    padding-right: 2px;
+    font-size: 0.68rem;
+    padding-left: 2px;
+    padding-right: 1px;
+  }
+
+  .routineos-page .activity-title-input {
+    min-width: 0;
+    width: 100% !important;
   }
 
   .routineos-page .routine-drop-btn {
+    grid-column: 3;
+    grid-row: 2;
+    justify-self: start;
     padding: 3px 6px;
     font-size: 0.62rem;
   }
