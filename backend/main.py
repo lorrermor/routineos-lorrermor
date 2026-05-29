@@ -237,6 +237,15 @@ def load_user_metadata_profile(user) -> dict:
     return profile if isinstance(profile, dict) else {}
 
 
+def lightweight_profile_metadata(profile_data: dict) -> dict:
+    allowed = {
+        "nickname", "bio", "location", "cover_color", "visibility",
+        "status", "links", "connections", "share_menu",
+        "share_routines", "share_sottoroutines"
+    }
+    return {key: profile_data.get(key) for key in allowed if key in profile_data}
+
+
 def save_profile_data(user_id: str, token: str, profile_data: dict):
     key = profile_config_key(user_id)
     rest_delete_rows("config", {"chiave": key, "user_id": user_id}, token)
@@ -451,9 +460,16 @@ async def get_profile(authorization: str = Header(None), user_id: str = Depends(
     try:
         user_response = auth_supabase.auth.get_user(token)
         user = user_response.user
-        social = load_user_metadata_profile(user)
-        if not social:
-            social = load_profile_data(user_id, token)
+        stored_social = load_profile_data(user_id, token)
+        metadata_social = load_user_metadata_profile(user)
+        social = {**metadata_social, **stored_social} if stored_social else metadata_social
+        if metadata_social.get("avatar"):
+            if not stored_social:
+                save_profile_data(user_id, token, social)
+            try:
+                update_supabase_user(token, {"data": {"pantrypro_profile": lightweight_profile_metadata(social)}})
+            except Exception:
+                pass
         return {
             "user_id": user_id,
             "email": user.email if user else "",
@@ -480,10 +496,11 @@ async def update_profile_social(data: dict, authorization: str = Header(None), u
     if isinstance(cleaned.get("avatar"), str) and len(cleaned["avatar"]) > 350000:
         raise HTTPException(status_code=400, detail="Foto troppo grande. Scegli un'immagine piu leggera.")
 
+    save_profile_data(user_id, token, cleaned)
     try:
-        update_supabase_user(token, {"data": {"pantrypro_profile": cleaned}})
+        update_supabase_user(token, {"data": {"pantrypro_profile": lightweight_profile_metadata(cleaned)}})
     except Exception:
-        save_profile_data(user_id, token, cleaned)
+        pass
     return {"status": "success", "social": cleaned}
 
 

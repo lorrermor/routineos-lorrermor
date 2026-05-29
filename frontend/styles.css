@@ -1926,10 +1926,94 @@ datalist option {
   }
 
   .planner-ingredient-row {
-    grid-template-columns: 28px minmax(0, 1fr) 80px 48px !important;
+    grid-template-columns: 18px minmax(0, 1fr) 58px 34px 22px !important;
+    gap: 5px !important;
+    padding: 6px !important;
+  }
+
+  .planner-page .drag-handle {
+    width: 18px;
+    min-width: 18px;
+    height: 30px;
+    border-radius: 7px;
+    font-size: 0;
+    padding: 0;
+  }
+
+  .planner-page .drag-handle::before {
+    content: "⋮";
+    font-size: 16px;
+    line-height: 1;
+  }
+
+  .planner-page .meal-box > div:first-child,
+  .planner-page .drag-drop-target > div:first-child {
+    align-items: stretch !important;
+    gap: 6px !important;
+  }
+
+  .planner-page .meal-box > div:first-child > div,
+  .planner-page .drag-drop-target > div:first-child > div {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .planner-page .meal-box input[type="text"],
+  .planner-page .drag-drop-target input[type="text"],
+  .planner-ingredient-input {
+    min-width: 0;
+    width: 100% !important;
+    max-width: 100%;
+  }
+
+  .planner-page .btn-cp {
+    padding: 4px 6px !important;
+    font-size: 0.68rem !important;
+    white-space: nowrap;
+  }
+
+  .planner-ingredient-row input[type="number"] {
+    min-width: 0;
+    width: 100% !important;
+    padding-left: 6px;
+    padding-right: 6px;
   }
 
   .planner-ingredient-badge {
-    grid-column: 2;
+    grid-column: 2 / 5;
+    grid-row: 2;
+    padding: 3px 7px;
+    font-size: 0.62rem;
+  }
+
+  .planner-ingredient-row .btn-del {
+    grid-column: 5;
+    grid-row: 1;
+  }
+}
+
+@media (max-width: 520px) {
+  .routineos-page main.container > header,
+  .routineos-page .section-head,
+  .routineos-page .task-row,
+  .routineos-page .connection-row,
+  .routineos-page .portable-actions,
+  .routineos-page .share-options {
+    gap: 10px !important;
+  }
+
+  .routineos-page .share-options label {
+    flex: 1 1 132px;
+    justify-content: center;
+  }
+
+  .routineos-page .editor-row {
+    grid-template-columns: 22px 92px minmax(0, 1fr) 36px !important;
+    gap: 6px !important;
+  }
+
+  .routineos-page .editor-row .drag-handle {
+    width: 22px;
+    min-width: 22px;
   }
 }

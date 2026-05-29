@@ -67,9 +67,9 @@
                     </div>
                 </div>
 
-                <div class="soft-panel" style="margin-top:16px;">
-                    <strong>Eccezioni</strong>
-                    <p style="color:var(--dim); margin:6px 0 10px; font-size:.86rem;">Scegli i giorni in cui questa routine non deve comparire, ad esempio la domenica.</p>
+                <div id="daily-options" class="soft-panel" style="margin-top:16px;">
+                    <strong>Eccezioni giornaliere</strong>
+                    <p style="color:var(--dim); margin:6px 0 10px; font-size:.86rem;">Scegli i giorni in cui una routine giornaliera non deve comparire.</p>
                     <div id="routine-excluded-days" class="share-options">
                         <label><input type="checkbox" value="Lunedi"> Lunedi</label>
                         <label><input type="checkbox" value="Martedi"> Martedi</label>
@@ -78,6 +78,36 @@
                         <label><input type="checkbox" value="Venerdi"> Venerdi</label>
                         <label><input type="checkbox" value="Sabato"> Sabato</label>
                         <label><input type="checkbox" value="Domenica"> Domenica</label>
+                    </div>
+                </div>
+
+                <div id="weekly-options" class="soft-panel" style="margin-top:16px; display:none;">
+                    <strong>Settimane del mese</strong>
+                    <p style="color:var(--dim); margin:6px 0 10px; font-size:.86rem;">Per le routine settimanali scegli in quali settimane del mese farle apparire. Se non selezioni nulla, valgono tutte.</p>
+                    <div id="routine-weeks" class="share-options">
+                        <label><input type="checkbox" value="1"> Settimana 1</label>
+                        <label><input type="checkbox" value="2"> Settimana 2</label>
+                        <label><input type="checkbox" value="3"> Settimana 3</label>
+                        <label><input type="checkbox" value="4"> Settimana 4</label>
+                    </div>
+                </div>
+
+                <div id="monthly-options" class="soft-panel" style="margin-top:16px; display:none;">
+                    <strong>Mesi attivi</strong>
+                    <p style="color:var(--dim); margin:6px 0 10px; font-size:.86rem;">Per le routine mensili scegli in quali mesi dell'anno farle comparire. Se non selezioni nulla, valgono tutti.</p>
+                    <div id="routine-months" class="share-options">
+                        <label><input type="checkbox" value="1"> Gennaio</label>
+                        <label><input type="checkbox" value="2"> Febbraio</label>
+                        <label><input type="checkbox" value="3"> Marzo</label>
+                        <label><input type="checkbox" value="4"> Aprile</label>
+                        <label><input type="checkbox" value="5"> Maggio</label>
+                        <label><input type="checkbox" value="6"> Giugno</label>
+                        <label><input type="checkbox" value="7"> Luglio</label>
+                        <label><input type="checkbox" value="8"> Agosto</label>
+                        <label><input type="checkbox" value="9"> Settembre</label>
+                        <label><input type="checkbox" value="10"> Ottobre</label>
+                        <label><input type="checkbox" value="11"> Novembre</label>
+                        <label><input type="checkbox" value="12"> Dicembre</label>
                     </div>
                 </div>
 
@@ -102,7 +132,7 @@
     </div>
     <script src="config.js?v=routineos-config-1"></script>
 
-    <script src="script.js?v=routineos-api-3"></script>
+    <script src="script.js?v=routineos-api-4"></script>
     <script>
         (function () {
             function key() { return `pantrypro_sheets:${localStorage.getItem("pantrypro_user_id") || "local"}`; }
@@ -138,17 +168,21 @@
         });
 
         function toggleCustomFrequency() {
-            const isCustom = document.getElementById('routine-frequency').value === 'personalizzata';
+            const frequency = document.getElementById('routine-frequency').value;
+            const isCustom = frequency === 'personalizzata';
             document.getElementById('custom-frequency-wrap').style.display = isCustom ? 'block' : 'none';
+            document.getElementById('daily-options').style.display = frequency === 'giornaliera' ? 'block' : 'none';
+            document.getElementById('weekly-options').style.display = frequency === 'settimanale' ? 'block' : 'none';
+            document.getElementById('monthly-options').style.display = frequency === 'mensile' ? 'block' : 'none';
         }
 
-        function getExcludedDays() {
-            return Array.from(document.querySelectorAll('#routine-excluded-days input:checked')).map(input => input.value);
+        function checkedValues(selector) {
+            return Array.from(document.querySelectorAll(`${selector} input:checked`)).map(input => input.value);
         }
 
-        function setExcludedDays(days) {
-            const selected = new Set(days || []);
-            document.querySelectorAll('#routine-excluded-days input').forEach(input => {
+        function setCheckedValues(selector, values) {
+            const selected = new Set((values || []).map(String));
+            document.querySelectorAll(`${selector} input`).forEach(input => {
                 input.checked = selected.has(input.value);
             });
         }
@@ -170,7 +204,9 @@
             document.getElementById('routine-end').value = '2099-12-31';
             document.getElementById('routine-interval').value = '7';
             document.getElementById('routine-status').textContent = '';
-            setExcludedDays([]);
+            setCheckedValues('#routine-excluded-days', []);
+            setCheckedValues('#routine-weeks', []);
+            setCheckedValues('#routine-months', []);
             toggleCustomFrequency();
             routineItems = [];
             addRoutineItem();
@@ -183,7 +219,9 @@
             document.getElementById('routine-start').value = routine.inizio || new Date().toISOString().split('T')[0];
             document.getElementById('routine-end').value = routine.fine || '2099-12-31';
             document.getElementById('routine-interval').value = routine.intervallo_giorni || '7';
-            setExcludedDays(routine.giorni_esclusi || routine.exclude_days || []);
+            setCheckedValues('#routine-excluded-days', routine.giorni_esclusi || routine.exclude_days || []);
+            setCheckedValues('#routine-weeks', routine.settimane_mese || routine.weeks_of_month || []);
+            setCheckedValues('#routine-months', routine.mesi_attivi || routine.active_months || []);
             toggleCustomFrequency();
             routineItems = [];
             (routine.elementi || []).forEach(addRoutineItem);
@@ -269,7 +307,17 @@
                 .filter(item => item.titolo.trim())
                 .map((item, index) => ({ ...item, id: item.id || `task_${index}` }));
 
-            const routine = { nome, frequenza, inizio, fine, intervallo_giorni: intervallo, giorni_esclusi: getExcludedDays(), elementi };
+            const routine = {
+                nome,
+                frequenza,
+                inizio,
+                fine,
+                intervallo_giorni: intervallo,
+                giorni_esclusi: frequenza === 'giornaliera' ? checkedValues('#routine-excluded-days') : [],
+                settimane_mese: frequenza === 'settimanale' ? checkedValues('#routine-weeks') : [],
+                mesi_attivi: frequenza === 'mensile' ? checkedValues('#routine-months') : [],
+                elementi
+            };
             const res = await apiFetch(`${API}/routine/save`, {
                 method: 'POST',
                 body: JSON.stringify({ filename: nome, original_filename: editingRoutineName, routine })
@@ -310,6 +358,7 @@
     </script>
 </body>
 </html>
+
 
 
 

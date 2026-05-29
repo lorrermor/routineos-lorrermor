@@ -144,6 +144,10 @@ function nomeGiornoSettimana(data = new Date()) {
     return giorniSettimana[(data.getDay() + 6) % 7];
 }
 
+function settimanaDelMese(data = new Date()) {
+    return Math.min(4, Math.ceil(data.getDate() / 7));
+}
+
 let currentPlan = { nome: "", inizio: "", fine: "", pasti: [] };
 
 let originalFilename = null;
@@ -711,6 +715,8 @@ function isRoutineDue(item, oggi = new Date()) {
     const frequenza = (item.frequenza || "giornaliera").toLowerCase();
     if (frequenza === "giornaliera") return true;
     if (frequenza === "settimanale") {
+        const weeks = item.settimane_mese || item.weeks_of_month || [];
+        if (Array.isArray(weeks) && weeks.length && !weeks.map(String).includes(String(settimanaDelMese(oggi)))) return false;
         const giorno = item.giorno_settimana;
         if (item.tipo === "sottoroutine" && (giorno === "" || giorno === undefined || giorno === null)) {
             return true;
@@ -719,7 +725,11 @@ function isRoutineDue(item, oggi = new Date()) {
             ? oggi.getDay() === 0
             : oggi.getDay() === parseInt(giorno, 10);
     }
-    if (frequenza === "mensile") return fineMese(oggi);
+    if (frequenza === "mensile") {
+        const months = item.mesi_attivi || item.active_months || [];
+        if (Array.isArray(months) && months.length && !months.map(String).includes(String(oggi.getMonth() + 1))) return false;
+        return fineMese(oggi);
+    }
     if (frequenza === "annuale") return fineAnno(oggi);
 
     if (frequenza === "personalizzata") {
@@ -3032,13 +3042,13 @@ function readPlannerDrag(event) {
 function dropMeal(event, giorno, toIndex) {
     event.preventDefault();
     const payload = readPlannerDrag(event);
-    if (payload.type !== "meal" || payload.giorno !== giorno) return;
-    const dayEntriesBefore = currentPlan.pasti
+    if (payload.type !== "meal") return;
+    const fromIndex = Number.isInteger(payload.pIdx) ? payload.pIdx : currentPlan.pasti
         .map((pasto, index) => ({ pasto, index }))
-        .filter(entry => entry.pasto.giorno === giorno);
-    const fromEntry = dayEntriesBefore[payload.dayIndex];
-    if (!fromEntry) return;
-    const [item] = currentPlan.pasti.splice(fromEntry.index, 1);
+        .filter(entry => entry.pasto.giorno === payload.giorno)[payload.dayIndex]?.index;
+    if (fromIndex === undefined || !currentPlan.pasti[fromIndex]) return;
+    const [item] = currentPlan.pasti.splice(fromIndex, 1);
+    item.giorno = giorno;
     const dayEntriesAfter = currentPlan.pasti
         .map((pasto, index) => ({ pasto, index }))
         .filter(entry => entry.pasto.giorno === giorno);
@@ -3050,16 +3060,26 @@ function dropMeal(event, giorno, toIndex) {
 function dropDish(event, pIdx, toIndex) {
     event.preventDefault();
     const payload = readPlannerDrag(event);
-    if (payload.type !== "dish" || payload.pIdx !== pIdx) return;
-    moveArrayItem(currentPlan.pasti[pIdx].piatti, payload.index, toIndex);
+    if (payload.type !== "dish") return;
+    const source = currentPlan.pasti[payload.pIdx]?.piatti;
+    const target = currentPlan.pasti[pIdx]?.piatti;
+    if (!source || !target || !source[payload.index]) return;
+    const [item] = source.splice(payload.index, 1);
+    const insertAt = Math.max(0, Math.min(toIndex, target.length));
+    target.splice(insertAt, 0, item);
     renderGiorni();
 }
 
 function dropIngredient(event, pIdx, ptIdx, toIndex) {
     event.preventDefault();
     const payload = readPlannerDrag(event);
-    if (payload.type !== "ingredient" || payload.pIdx !== pIdx || payload.ptIdx !== ptIdx) return;
-    moveArrayItem(currentPlan.pasti[pIdx].piatti[ptIdx].ingredienti, payload.index, toIndex);
+    if (payload.type !== "ingredient") return;
+    const source = currentPlan.pasti[payload.pIdx]?.piatti?.[payload.ptIdx]?.ingredienti;
+    const target = currentPlan.pasti[pIdx]?.piatti?.[ptIdx]?.ingredienti;
+    if (!source || !target || !source[payload.index]) return;
+    const [item] = source.splice(payload.index, 1);
+    const insertAt = Math.max(0, Math.min(toIndex, target.length));
+    target.splice(insertAt, 0, item);
     renderGiorni();
 }
 
@@ -3095,7 +3115,7 @@ function renderGiorni() {
         pDiv.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                 <div style="display:flex; align-items:center; gap:8px;">
-                    <span class="drag-handle" draggable="true" ondragstart="startPlannerDrag(event, {type:'meal', giorno:'${pasto.giorno}', dayIndex:${dayIndex}})" title="Trascina pasto">::</span>
+                    <span class="drag-handle" draggable="true" ondragstart="startPlannerDrag(event, {type:'meal', pIdx:${pIdx}, giorno:'${pasto.giorno}', dayIndex:${dayIndex}})" title="Trascina pasto">::</span>
                     <input type="text" value="${escapeHTML(pasto.nome || "")}" onchange="currentPlan.pasti[${pIdx}].nome=this.value" style="font-weight:bold; color:var(--accent); background:transparent; border:none; border-bottom:1px solid #444;">
                     <button class="btn-cp" onclick="copyMealByIndex(${pIdx})" title="Copia Pasto">Copia</button>
                     <button class="btn-cp" onclick="pasteMealByIndex(${pIdx})" title="Incolla Pasto">Incolla</button>
