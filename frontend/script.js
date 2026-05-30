@@ -1712,9 +1712,9 @@ function exportSelectedData(format) {
     } else if (format === "csv") {
         downloadTextFile(`routineos_export_${date}.csv`, portableDataToCsv(data), "text/csv;charset=utf-8");
     } else if (format === "excel") {
-        downloadTextFile(`routineos_export_${date}.xls`, portableDataToExcelHtml(data), "application/vnd.ms-excel;charset=utf-8");
+        downloadTextFile(`routineos_export_${date}.xls`, portableDataToExcelXml(data), "application/vnd.ms-excel;charset=utf-8");
     } else if (format === "pdf") {
-        openPortablePdf(pack);
+        downloadPortablePdf(pack);
     }
     if (status) status.textContent = `Esportazione ${format.toUpperCase()} creata.`;
 }
@@ -1813,39 +1813,48 @@ function portableDataToCsv(data) {
     ].join(","))].join("\n");
 }
 
-function portableDataToExcelHtml(data) {
+function excelXmlEscape(value) {
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+}
+
+function excelCell(value, style = "") {
+    const styleAttr = style ? ` ss:StyleID="${style}"` : "";
+    return `<Cell${styleAttr}><Data ss:Type="String">${excelXmlEscape(value)}</Data></Cell>`;
+}
+
+function portableDataToExcelXml(data) {
     const rows = portableRows(data);
-    return `
-        <html><head><meta charset="UTF-8">
-        <style>
-            body { font-family: Arial, sans-serif; color:#111827; }
-            h1 { color:#0f172a; }
-            h2 { margin-top:24px; color:#1d4ed8; }
-            table { border-collapse:collapse; width:100%; margin-bottom:22px; }
-            th { background:#dbeafe; color:#111827; font-weight:700; }
-            th, td { border:1px solid #cbd5e1; padding:8px; vertical-align:top; }
-            .details { white-space:pre-wrap; }
-            .json { color:#64748b; font-size:10px; }
-        </style></head><body>
-        <h1>Esportazione RoutineOS</h1>
-        <p>Creata il ${new Date().toLocaleString("it-IT")}</p>
-        ${Object.entries(data).map(([type, items]) => `
-            <h2>${portableTypeTitle(type)}</h2>
-            <table>
-                <thead><tr><th>Categoria</th><th>Nome</th><th>Riepilogo</th><th>Dettagli</th><th>Dati importazione</th></tr></thead>
-                <tbody>
-                    ${(items || []).map(item => `<tr>
-                        <td>${escapeHTML(type)}</td>
-                        <td>${escapeHTML(portableLabel(type, item))}</td>
-                        <td>${escapeHTML(portableSummary(type, item))}</td>
-                        <td class="details">${escapeHTML(portableDetails(type, item))}</td>
-                        <td class="json">${escapeHTML(JSON.stringify(item))}</td>
-                    </tr>`).join("") || `<tr><td colspan="5">Nessun elemento</td></tr>`}
-                </tbody>
-            </table>
-        `).join("")}
-        </body></html>
-    `;
+    const body = rows.map(row => `<Row>
+        ${excelCell(row.categoria)}
+        ${excelCell(row.nome)}
+        ${excelCell(row.riepilogo)}
+        ${excelCell(row.dettagli)}
+        ${excelCell(row.dati)}
+    </Row>`).join("");
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+ <Styles>
+  <Style ss:ID="header"><Font ss:Bold="1" ss:Color="#0F172A"/><Interior ss:Color="#DBEAFE" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="title"><Font ss:Bold="1" ss:Size="16" ss:Color="#1D4ED8"/></Style>
+ </Styles>
+ <Worksheet ss:Name="RoutineOS">
+  <Table>
+   <Column ss:Width="100"/><Column ss:Width="180"/><Column ss:Width="220"/><Column ss:Width="420"/><Column ss:Width="520"/>
+   <Row>${excelCell("Esportazione RoutineOS", "title")}${excelCell(new Date().toLocaleString("it-IT"))}</Row>
+   <Row></Row>
+   <Row>${excelCell("Categoria", "header")}${excelCell("Nome", "header")}${excelCell("Riepilogo", "header")}${excelCell("Dettagli", "header")}${excelCell("Dati importazione", "header")}</Row>
+   ${body || `<Row>${excelCell("Nessun elemento")}</Row>`}
+  </Table>
+ </Worksheet>
+</Workbook>`;
 }
 
 function portableTypeTitle(type) {
@@ -1859,48 +1868,49 @@ function portableTypeTitle(type) {
     return titles[type] || type;
 }
 
-function openPortablePdf(pack) {
-    const win = window.open("", "_blank");
-    if (!win) {
-        alert("Il browser ha bloccato la finestra PDF. Consenti i popup per questa pagina.");
+function downloadPortablePdf(pack) {
+    const jsPDF = window.jspdf && window.jspdf.jsPDF;
+    if (!jsPDF) {
+        alert("Modulo PDF non ancora caricato. Riprova tra qualche secondo oppure esporta in CSV/Excel.");
         return;
     }
-    const data = pack.data;
-    win.document.write(`
-        <!DOCTYPE html>
-        <html lang="it">
-        <head>
-            <meta charset="UTF-8">
-            <title>Esportazione RoutineOS</title>
-            <style>
-                body { font-family: Arial, sans-serif; color:#111827; padding:28px; line-height:1.45; }
-                h1 { margin:0 0 8px; }
-                .subtitle { color:#475569; margin-bottom:24px; }
-                h2 { margin-top:28px; border-bottom:2px solid #bfdbfe; padding-bottom:6px; color:#1d4ed8; }
-                article { page-break-inside: avoid; margin:14px 0; padding:14px; border:1px solid #e5e7eb; border-radius:10px; }
-                article strong { display:block; font-size:16px; margin-bottom:4px; }
-                .summary { color:#475569; font-size:13px; margin-bottom:10px; }
-                .details { white-space:pre-wrap; font-size:12px; background:#f8fafc; padding:10px; border-radius:7px; border:1px solid #e2e8f0; }
-            </style>
-        </head>
-        <body>
-            <h1>Esportazione RoutineOS</h1>
-            <p class="subtitle">Creata il ${new Date(pack.exported_at).toLocaleString("it-IT")}.</p>
-            ${Object.entries(data).map(([type, items]) => `
-                <h2>${escapeHTML(portableTypeTitle(type))}</h2>
-                ${(items || []).map(item => `
-                    <article>
-                        <strong>${escapeHTML(portableLabel(type, item))}</strong>
-                        <div class="summary">${escapeHTML(portableSummary(type, item))}</div>
-                        <div class="details">${escapeHTML(portableDetails(type, item))}</div>
-                    </article>
-                `).join("") || "<p>Nessun elemento.</p>"}
-            `).join("")}
-            <script>window.onload = () => window.print();<\/script>
-        </body>
-        </html>
-    `);
-    win.document.close();
+    const doc = new jsPDF({ unit: "pt", format: "a4" });
+    const margin = 42;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    let y = margin;
+    const addLine = (text, size = 10, bold = false, color = [15, 23, 42]) => {
+        doc.setFont("helvetica", bold ? "bold" : "normal");
+        doc.setFontSize(size);
+        doc.setTextColor(...color);
+        const lines = doc.splitTextToSize(String(text || ""), pageWidth - margin * 2);
+        lines.forEach(line => {
+            if (y > pageHeight - margin) {
+                doc.addPage();
+                y = margin;
+            }
+            doc.text(line, margin, y);
+            y += size + 5;
+        });
+    };
+    addLine("Esportazione RoutineOS", 18, true, [29, 78, 216]);
+    addLine(`Creata il ${new Date(pack.exported_at).toLocaleString("it-IT")}`, 10, false, [71, 85, 105]);
+    y += 10;
+    Object.entries(pack.data || {}).forEach(([type, items]) => {
+        addLine(portableTypeTitle(type), 14, true, [29, 78, 216]);
+        if (!(items || []).length) {
+            addLine("Nessun elemento.", 10, false, [100, 116, 139]);
+            y += 6;
+            return;
+        }
+        (items || []).forEach(item => {
+            addLine(portableLabel(type, item), 12, true);
+            addLine(portableSummary(type, item), 9, false, [71, 85, 105]);
+            addLine(portableDetails(type, item), 9);
+            y += 10;
+        });
+    });
+    doc.save(`routineos_export_${localISODate()}.pdf`);
 }
 
 function parseCsv(text) {
@@ -1941,21 +1951,23 @@ function parseCsv(text) {
 
 function portableFromRows(rows) {
     const data = { routine: [], sottoroutine: [], piani: [], inventario: [], spesa_extra: [] };
-    const headers = (rows[0] || []).map(cell => String(cell || "").toLowerCase());
+    const headerRowIndex = rows.findIndex(row => row.some(cell => String(cell || "").toLowerCase() === "categoria"));
+    const effectiveRows = headerRowIndex >= 0 ? rows.slice(headerRowIndex) : rows;
+    const headers = (effectiveRows[0] || []).map(cell => String(cell || "").toLowerCase());
     const hasHeader = headers.includes("categoria");
     const start = hasHeader ? 1 : 0;
     const categoryIndex = hasHeader ? headers.indexOf("categoria") : 0;
     const jsonIndex = hasHeader
         ? Math.max(headers.indexOf("dati_json"), headers.indexOf("dati importazione"), headers.indexOf("dati"))
         : 2;
-    for (let i = start; i < rows.length; i++) {
-        const type = rows[i][categoryIndex];
-        const raw = rows[i][jsonIndex];
+    for (let i = start; i < effectiveRows.length; i++) {
+        const type = effectiveRows[i][categoryIndex];
+        const raw = effectiveRows[i][jsonIndex];
         if (!data[type] || !raw) continue;
         try {
             data[type].push(JSON.parse(raw));
         } catch (e) {
-            console.warn("Riga import ignorata:", rows[i], e);
+            console.warn("Riga import ignorata:", effectiveRows[i], e);
         }
     }
     return data;
@@ -1970,9 +1982,12 @@ function parsePortableImport(text, filename) {
     if (lower.endsWith(".csv")) {
         return portableFromRows(parseCsv(text));
     }
-    if (lower.endsWith(".xls") || lower.endsWith(".html")) {
-        const doc = new DOMParser().parseFromString(text, "text/html");
-        const rows = [...doc.querySelectorAll("tr")].map(tr => [...tr.children].map(td => td.textContent || ""));
+    if (lower.endsWith(".xls") || lower.endsWith(".xml") || lower.endsWith(".html")) {
+        const type = text.trim().startsWith("<?xml") || text.includes("<Workbook")
+            ? "text/xml"
+            : "text/html";
+        const doc = new DOMParser().parseFromString(text, type);
+        const rows = [...doc.querySelectorAll("Row, tr")].map(tr => [...tr.children].map(td => td.textContent || ""));
         return portableFromRows(rows);
     }
     if (lower.endsWith(".xlsx")) {

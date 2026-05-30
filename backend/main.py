@@ -292,6 +292,53 @@ def save_share_inbox_by_code(user_code: str, items: list, owner_user_id: str):
     }).execute()
 
 
+def admin_list_users(max_pages: int = 10) -> list:
+    if not SERVICE_ROLE_KEY:
+        return []
+    headers = {
+        "apikey": SERVICE_ROLE_KEY,
+        "Authorization": f"Bearer {SERVICE_ROLE_KEY}",
+    }
+    users = []
+    page = 1
+    while page <= max_pages:
+        response = httpx.get(
+            f"{URL_SB}/auth/v1/admin/users",
+            params={"page": page, "per_page": 100},
+            headers=headers,
+            timeout=20
+        )
+        if response.status_code >= 400:
+            return users
+        data = response.json()
+        batch = data.get("users") if isinstance(data, dict) else data
+        if not batch:
+            return users
+        users.extend(batch)
+        if len(batch) < 100:
+            return users
+        page += 1
+    return users
+
+
+def resolve_share_target(raw_target: str) -> tuple[str, Optional[str]]:
+    target = (raw_target or "").strip()
+    if not target:
+        return "", None
+    normalized = normalize_user_code(target) if "@" not in target else ""
+    lowered = target.lower()
+    for user in admin_list_users():
+        user_id = str(user.get("id") or "")
+        email = str(user.get("email") or "").lower()
+        metadata = user.get("user_metadata") or {}
+        profile = metadata.get("pantrypro_profile") or {}
+        nickname = str(profile.get("nickname") or metadata.get("nickname") or "").lower()
+        code = f"RO-{user_id[:8].upper()}" if user_id else ""
+        if lowered == email or lowered == nickname or (normalized and normalized == code):
+            return code, user_id
+    return normalized, None
+
+
 def update_supabase_user(token: str, payload: dict):
     response = httpx.put(
         f"{URL_SB}/auth/v1/user",
@@ -545,9 +592,9 @@ async def get_share_inbox(user_id: str = Depends(get_user_id)):
 
 @app.post("/share/send")
 async def send_share(data: dict, user_id: str = Depends(get_user_id)):
-    target_code = normalize_user_code(data.get("target_code") or "")
+    target_code, target_user_id = resolve_share_target(data.get("target_code") or "")
     if not target_code:
-        raise HTTPException(status_code=400, detail="Inserisci il codice RoutineOS della connessione.")
+        raise HTTPException(status_code=400, detail="Inserisci codice RoutineOS, email o nickname della connessione.")
 
     payload = data.get("data") or {}
     if not isinstance(payload, dict):
@@ -563,7 +610,7 @@ async def send_share(data: dict, user_id: str = Depends(get_user_id)):
     }
     inbox = read_share_inbox_by_code(target_code)
     inbox.append(item)
-    save_share_inbox_by_code(target_code, inbox, user_id)
+    save_share_inbox_by_code(target_code, inbox, target_user_id or user_id)
     return {"status": "success", "message": "Condivisione inviata.", "share": item}
 
 
