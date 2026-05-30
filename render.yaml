@@ -23,7 +23,7 @@ services:
     plan: free
     dockerfilePath: ./Dockerfile
     schedule: "15 4 * * *"
-    startCommand: python -c "import os, urllib.request; secret=os.environ.get('CRON_SECRET') or os.environ['SUPABASE_SERVICE_ROLE_KEY']; url=os.environ['ROUTINEOS_API_URL'].rstrip('/') + '/system/run-daily-updates'; req=urllib.request.Request(url, method='POST', headers={'X-Cron-Secret': secret}); print(urllib.request.urlopen(req, timeout=120).read().decode())"
+    startCommand: python -c "import os, urllib.request; secret=os.environ.get('CRON_SECRET') or os.environ['SUPABASE_SERVICE_ROLE_KEY']; url=os.environ['ROUTINEOS_API_URL'].rstrip('/') + '/system/run-daily-updates'; req=urllib.request.Request(url, method='POST', headers=dict([('X-Cron-Secret', secret)])); print(urllib.request.urlopen(req, timeout=120).read().decode())"
     envVars:
       - key: ROUTINEOS_API_URL
         value: https://routineos-api.onrender.com

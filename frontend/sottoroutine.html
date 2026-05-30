@@ -10,8 +10,8 @@
     <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
     <link rel="manifest" href="site.webmanifest?v=routineos-pwa-2">
     <meta name="theme-color" content="#081724">
-    <link rel="stylesheet" href="styles.css?v=routineos-visual-11">
-    <link rel="stylesheet" href="routineos-ui.css?v=routineos-ui-2">
+    <link rel="stylesheet" href="styles.css?v=routineos-visual-12">
+    <link rel="stylesheet" href="routineos-ui.css?v=routineos-ui-3">
 </head>
 <body class="routineos-page subroutine-page">
     <div class="app-shell">
@@ -50,7 +50,11 @@
                     </div>
                     <div>
                         <label>Routine principale</label>
-                        <select id="sub-parent"></select>
+                        <select id="sub-parent" onchange="updateSubParentActivities()"></select>
+                    </div>
+                    <div>
+                        <label>Attivita routine collegata</label>
+                        <select id="sub-parent-activity"></select>
                     </div>
                     <div>
                         <label>Frequenza</label>
@@ -97,7 +101,7 @@
     </div>
     <script src="config.js?v=routineos-config-1"></script>
 
-    <script src="script.js?v=routineos-api-16"></script>
+    <script src="script.js?v=routineos-api-17"></script>
     <script>
         (function () {
             function key() { return `pantrypro_sheets:${localStorage.getItem("pantrypro_user_id") || "local"}`; }
@@ -127,6 +131,7 @@
         let subItems = [];
         let editingSubName = null;
         let subMoveSelection = null;
+        let parentRoutineDetails = [];
 
         document.addEventListener('DOMContentLoaded', async () => {
             await loadParents();
@@ -146,14 +151,35 @@
         async function loadParents() {
             const select = document.getElementById('sub-parent');
             const list = await (await apiFetch(`${API}/routine/list`)).json();
+            parentRoutineDetails = await caricaDettagliDaLista('routine', list);
             if (!list.length) {
                 select.innerHTML = '<option value="">Nessuna routine principale</option>';
+                updateSubParentActivities();
                 return;
             }
-            select.innerHTML = list.map(item => {
-                const nome = typeof item === 'string' ? item : item.nome;
+            select.innerHTML = parentRoutineDetails.map(item => {
+                const nome = item.nome;
                 return `<option value="${escapeHTML(nome)}">${escapeHTML(nome)}</option>`;
             }).join('');
+            updateSubParentActivities();
+        }
+
+        function updateSubParentActivities(selectedValue = '') {
+            const activitySelect = document.getElementById('sub-parent-activity');
+            if (!activitySelect) return;
+            const routineName = document.getElementById('sub-parent').value;
+            const parent = parentRoutineDetails.find(item => item.nome === routineName);
+            const elementi = Array.isArray(parent?.elementi) ? parent.elementi : [];
+            const options = elementi
+                .filter(item => (item.titolo || item.nome || '').trim())
+                .map(item => {
+                    const title = item.titolo || item.nome;
+                    const selected = selectedValue === title ? 'selected' : '';
+                    return `<option value="${escapeHTML(title)}" ${selected}>${escapeHTML(title)}</option>`;
+                })
+                .join('');
+            activitySelect.innerHTML = `<option value="">Collega automaticamente</option>${options}`;
+            if (selectedValue) activitySelect.value = selectedValue;
         }
 
         function addSubItem(value = '') {
@@ -188,6 +214,7 @@
             editingSubName = sottoroutine.nome;
             document.getElementById('sub-name').value = sottoroutine.nome || '';
             document.getElementById('sub-parent').value = sottoroutine.routine_parent || '';
+            updateSubParentActivities(sottoroutine.routine_activity_parent || '');
             document.getElementById('sub-frequency').value = sottoroutine.frequenza || 'giornaliera';
             document.getElementById('sub-start').value = sottoroutine.inizio || new Date().toISOString().split('T')[0];
             document.getElementById('sub-end').value = sottoroutine.fine || '2099-12-31';
@@ -299,6 +326,7 @@
         async function saveSubroutine() {
             const nome = document.getElementById('sub-name').value.trim();
             const routine_parent = document.getElementById('sub-parent').value;
+            const routine_activity_parent = document.getElementById('sub-parent-activity').value;
             const frequenza = document.getElementById('sub-frequency').value;
             const inizio = document.getElementById('sub-start').value;
             const fine = document.getElementById('sub-end').value;
@@ -314,7 +342,7 @@
                 .filter(item => item.titolo.trim())
                 .map((item, index) => ({ ...item, id: item.id || `task_${index}` }));
 
-            const sottoroutine = { nome, routine_parent, frequenza, inizio, fine, intervallo_giorni: intervallo, elementi };
+            const sottoroutine = { nome, routine_parent, routine_activity_parent, frequenza, inizio, fine, intervallo_giorni: intervallo, elementi };
             const res = await apiFetch(`${API}/sottoroutine/save`, {
                 method: 'POST',
                 body: JSON.stringify({ filename: nome, original_filename: editingSubName, sottoroutine })
@@ -345,6 +373,7 @@
                         <span class="task-title">${escapeHTML(item.nome)}</span>
                         <span class="task-meta routine-date-meta">
                             <span>${escapeHTML(item.routine_parent || 'Senza routine principale')}</span>
+                            ${item.routine_activity_parent ? `<span>${escapeHTML(item.routine_activity_parent)}</span>` : ''}
                             <span>${escapeHTML(item.frequenza)}</span>
                         </span>
                     </span>
@@ -358,6 +387,7 @@
     </script>
 </body>
 </html>
+
 
 
 

@@ -258,11 +258,13 @@ function initMobileSideMenu() {
     function closeMenu() {
         document.body.classList.remove("side-menu-open");
         toggle.setAttribute("aria-label", "Apri menu");
+        toggle.innerHTML = "<span>☰</span><span>Menu</span>";
     }
 
     toggle.addEventListener("click", () => {
         const open = document.body.classList.toggle("side-menu-open");
         toggle.setAttribute("aria-label", open ? "Chiudi menu" : "Apri menu");
+        toggle.innerHTML = open ? "<span>×</span><span>Chiudi</span>" : "<span>☰</span><span>Menu</span>";
     });
     backdrop.addEventListener("click", closeMenu);
     sideMenu.addEventListener("click", event => {
@@ -836,11 +838,16 @@ function findLinkedSubroutinesForDashboard(item, title, sottoroutineDovute, used
     const candidates = sottoroutineDovute.filter(sub => {
         const subNameKey = normalizeName(sub.nome);
         const subParentKey = normalizeName(sub.routine_parent);
+        const subActivityKey = normalizeName(sub.routine_activity_parent || sub.attivita_parent || sub.activity_parent);
         if (!subNameKey || usedSubroutineKeys.has(subNameKey)) return false;
+        if (subActivityKey) {
+            return subParentKey === parentKey && subActivityKey === titleKey;
+        }
         return (
             (subParentKey === parentKey && subNameKey === titleKey) ||
             subNameKey === titleKey ||
-            subParentKey === titleKey
+            subParentKey === titleKey ||
+            subParentKey === parentKey
         );
     });
 

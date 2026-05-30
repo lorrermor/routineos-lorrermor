@@ -18,11 +18,14 @@ body.routineos-page .side-menu {
 }
 
 body.routineos-page .side-menu::before {
-  content: "";
-  background-image: url("logo-routineos-no-tagline-dark.png") !important;
+  content: "RoutineOS";
+  color: #0f172a !important;
+  font-size: 1.18rem !important;
+  font-weight: 900 !important;
+  background-image: url("icona.svg") !important;
   background-position: left center !important;
   background-repeat: no-repeat !important;
-  background-size: 168px auto !important;
+  background-size: 28px 28px !important;
 }
 
 body.routineos-page .side-menu a,
@@ -208,6 +211,15 @@ body.routineos-page .planner-ingredient-row.is-linked {
 body.routineos-page .planner-ingredient-row.is-unlinked {
   background: #fffbeb !important;
   border: 1px solid #f59e0b !important;
+}
+
+@media (max-width: 900px) {
+  body.routineos-page .side-menu::before {
+    padding-left: 112px !important;
+    padding-right: 10px !important;
+    background-position: 70px center !important;
+    background-size: 26px 26px !important;
+  }
 }
 
 body.routineos-page .planner-ingredient-input.is-linked {

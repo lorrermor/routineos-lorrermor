@@ -1207,13 +1207,16 @@ label {
 }
 
 .side-menu::before {
-  content: "";
+  content: "RoutineOS";
   display: flex;
   align-items: center;
+  color: #0f172a;
+  font-size: 1.18rem;
+  font-weight: 900;
   min-height: 46px;
   margin: 2px 4px 12px;
-  padding: 0 8px;
-  background: url("logo-routineos-no-tagline-dark.png") left center / 168px auto no-repeat;
+  padding: 0 8px 0 38px;
+  background: url("icona.svg") left center / 28px 28px no-repeat;
   border-bottom: 1px solid var(--border);
 }
 
@@ -2078,19 +2081,11 @@ datalist option {
     min-height: 58px;
     margin-left: 14px;
     margin-right: 14px;
-    padding-left: 0;
-    padding-right: 54px;
-    background-size: 162px auto;
+    padding-left: 112px;
+    padding-right: 10px;
+    background-position: 70px center;
+    background-size: 26px 26px;
     text-align: left;
-  }
-
-  body.side-menu-open .mobile-menu-toggle {
-    left: calc(min(82vw, 310px) - 58px);
-    width: 44px;
-    min-width: 44px;
-    padding: 0;
-    justify-content: center;
-    overflow: hidden;
   }
 
   body.side-menu-open .side-menu {
