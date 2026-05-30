@@ -3350,7 +3350,7 @@ function renderGiorni() {
                     <span class="drag-handle" draggable="true" onclick="selectPlannerMove(event, {type:'ingredient', pIdx:${pIdx}, ptIdx:${ptIdx}, index:${iIdx}})" ondragstart="startPlannerDrag(event, {type:'ingredient', pIdx:${pIdx}, ptIdx:${ptIdx}, index:${iIdx}})" title="Trascina ingrediente">::</span>
                     <input class="planner-ingredient-input ${isInv ? 'is-linked' : 'is-unlinked'}" type="text" value="${escapeHTML(String(ing.nome || "").replace(/_/g, ' '))}" list="lista-ingredienti-inventario" onchange="aggiornaIng(${pIdx}, ${ptIdx}, ${iIdx}, this.value)" title="${isInv ? 'Collegato all inventario' : 'Non collegato all inventario'}">
                     <input type="number" step="0.1" value="${escapeHTML(ing.qta || 0)}" onchange="currentPlan.pasti[${pIdx}].piatti[${ptIdx}].ingredienti[${iIdx}].qta=this.value" style="font-size:0.8rem;">
-                    <span style="font-size:0.7rem; color:var(--dim); align-self:center;">${escapeHTML(unita)}</span>
+                    <span class="planner-unit-label" style="font-size:0.7rem; color:var(--dim); align-self:center;">${escapeHTML(unita)}</span>
                     <span class="planner-ingredient-badge ${isInv ? 'is-linked' : 'is-unlinked'}">${isInv ? 'Inventario' : 'Extra'}</span>
                     ${plannerDropButton('ingredient', pIdx, ptIdx, iIdx)}
                     <button class="btn-del" onclick="currentPlan.pasti[${pIdx}].piatti[${ptIdx}].ingredienti.splice(${iIdx},1); renderGiorni();" style="width:20px; height:20px; font-size:10px;">X</button>`;
