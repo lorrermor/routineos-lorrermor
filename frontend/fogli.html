@@ -4,13 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RoutineOS - Fogli</title>
-    <link rel="icon" type="image/x-icon" href="favicon-v2.ico">
-    <link rel="stylesheet" href="styles.css?v=routineos-visual-9">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+    <link rel="icon" href="favicon-v2.ico">
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+    <link rel="manifest" href="site.webmanifest">
+    <meta name="theme-color" content="#081724">
+    <link rel="stylesheet" href="styles.css?v=routineos-visual-10">
     <style>
         .sheets-layout { display:grid; grid-template-columns:300px minmax(0,1fr); gap:18px; align-items:start; }
         .sheets-panel { position:sticky; top:20px; display:grid; gap:10px; }
         .sheet-tree { display:grid; gap:6px; }
-        .sheet-tree-item { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:center; border:1px solid #334155; background:rgba(15,23,42,.42); border-radius:8px; padding:10px; }
+        .sheet-tree-item { display:grid; grid-template-columns:24px minmax(0,1fr) auto; gap:8px; align-items:center; border:1px solid #334155; background:rgba(15,23,42,.42); border-radius:8px; padding:10px; }
         .sheet-tree-item button { padding:7px 9px; }
         .sheet-tree-item.active { border-color:var(--accent); background:rgba(59,130,246,.16); }
         .sheet-tree-main { min-width:0; cursor:pointer; }
@@ -25,6 +30,8 @@
         .sheet-empty { border:1px dashed #475569; border-radius:10px; padding:28px; color:var(--dim); text-align:center; background:rgba(15,23,42,.28); }
         .sheet-section-label { color:var(--accent); font-size:.82rem; font-weight:800; letter-spacing:1px; text-transform:uppercase; margin:4px 0 10px; }
         .sheet-children-box { margin:0 0 20px; padding:14px; border:1px solid #334155; border-radius:10px; background:rgba(15,23,42,.28); }
+        .sheet-row-actions { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+        .sheet-row-actions .btn { padding:7px 9px; font-size:.78rem; }
         @media (max-width:900px) {
             .sheets-layout { grid-template-columns:1fr; }
             .sheets-panel { position:static; }
@@ -93,7 +100,7 @@
     </div>
     <script src="config.js?v=routineos-config-1"></script>
 
-    <script src="script.js?v=routineos-api-14"></script>
+    <script src="script.js?v=routineos-api-15"></script>
 </body>
 </html>
 

@@ -4,8 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RoutineOS - Accedi</title>
-    <link rel="icon" type="image/x-icon" href="favicon-v2.ico">
-    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+    <link rel="icon" href="favicon-v2.ico">
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+    <link rel="manifest" href="site.webmanifest">
+    <meta name="theme-color" content="#081724">
     <style>
         :root {
             --bg: #0f172a;
@@ -73,8 +77,11 @@
         }
 
         .login-logo {
-            font-size: 3rem;
-            margin-bottom: 8px;
+            width: min(260px, 78vw);
+            height: 82px;
+            margin: 0 auto 8px;
+            background: url("logo-routineos-no-tagline-transparent.png") center / contain no-repeat;
+            font-size: 0;
         }
 
         .login-title {
@@ -303,17 +310,15 @@
         }
 
         .login-logo {
-            width: 64px;
-            height: 64px;
-            border-radius: 18px;
+            width: min(260px, 78vw);
+            height: 82px;
+            border-radius: 0;
             margin: 0 auto 12px;
-            display: grid;
-            place-items: center;
-            background: #111827;
-            color: #ffffff;
-            font-size: 1.45rem;
-            font-weight: 850;
-            box-shadow: 0 16px 36px rgba(15,23,42,0.18);
+            display: block;
+            background: url("logo-routineos-no-tagline-transparent.png") center / contain no-repeat;
+            color: transparent;
+            font-size: 0;
+            box-shadow: none;
         }
 
         .login-container {

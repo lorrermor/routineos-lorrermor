@@ -1194,15 +1194,13 @@ label {
 }
 
 .side-menu::before {
-  content: "RoutineOS";
+  content: "";
   display: flex;
   align-items: center;
   min-height: 42px;
   margin: 2px 4px 12px;
   padding: 0 10px;
-  color: #0f172a;
-  font-size: 1.12rem;
-  font-weight: 850;
+  background: url("logo-routineos-no-tagline-transparent.png") left center / contain no-repeat;
   border-bottom: 1px solid var(--border);
 }
 
@@ -1965,7 +1963,7 @@ datalist option {
   min-width: 0;
   width: 100%;
   padding-left: 6px;
-  padding-right: 4px;
+  padding-right: 6px;
 }
 
 .activity-title-input {
@@ -1974,11 +1972,28 @@ datalist option {
 }
 
 .routine-editor-row {
-  grid-template-columns: 30px 82px minmax(220px, 1fr) auto 38px !important;
+  grid-template-columns: 30px 96px minmax(220px, 1fr) auto 38px !important;
 }
 
 .subroutine-editor-row {
-  grid-template-columns: 30px 82px minmax(220px, 1fr) 142px auto 38px !important;
+  grid-template-columns: 30px 96px minmax(220px, 1fr) 142px auto 38px !important;
+}
+
+.dashboard-movable-card .drag-handle {
+  margin-top: 2px;
+  flex: 0 0 auto;
+}
+
+.dashboard-card-buttons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.dashboard-card-buttons .btn {
+  padding: 7px 9px;
+  font-size: 0.78rem;
 }
 
 .mobile-menu-toggle,

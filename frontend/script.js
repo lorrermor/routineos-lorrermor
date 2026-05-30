@@ -975,6 +975,32 @@ function deleteDashboardComment(id) {
     saveDashboardComments(readStoredList(dashboardCommentsKey()).filter(item => item.id !== id));
 }
 
+function moveDashboardListItem(type, fromIndex, toIndex) {
+    const key = type === "note" ? dashboardNotesKey() : dashboardCommentsKey();
+    const items = readStoredList(key);
+    if (!items.length || fromIndex < 0 || toIndex < 0 || fromIndex >= items.length || toIndex >= items.length) return;
+    const [item] = items.splice(fromIndex, 1);
+    items.splice(toIndex, 0, item);
+    if (type === "note") saveDashboardNotes(items);
+    else saveDashboardComments(items);
+}
+
+function dashboardListDragStart(event, type, index) {
+    event.dataTransfer.setData("text/plain", JSON.stringify({ type, index }));
+    event.dataTransfer.effectAllowed = "move";
+}
+
+function dashboardListDrop(event, type, toIndex) {
+    event.preventDefault();
+    try {
+        const payload = JSON.parse(event.dataTransfer.getData("text/plain") || "{}");
+        if (payload.type !== type) return;
+        moveDashboardListItem(type, payload.index, toIndex);
+    } catch (e) {
+        console.warn("Spostamento dashboard non riuscito:", e);
+    }
+}
+
 function renderDashboardComments(comments) {
     const list = document.getElementById('dashboard-comments-list');
     if (!list) return;
@@ -982,14 +1008,19 @@ function renderDashboardComments(comments) {
         list.innerHTML = `<p class="empty-state">Nessun commento ancora.</p>`;
         return;
     }
-    list.innerHTML = comments.map(item => `
-        <article class="dashboard-comment-card">
+    list.innerHTML = comments.map((item, index) => `
+        <article class="dashboard-comment-card dashboard-movable-card" draggable="true" ondragstart="dashboardListDragStart(event, 'comment', ${index})" ondragover="event.preventDefault()" ondrop="dashboardListDrop(event, 'comment', ${index})">
             <div class="dashboard-card-actions">
+                <span class="drag-handle" title="Trascina commento">::</span>
                 <div>
                     <div>${escapeHTML(item.text).replace(/\n/g, "<br>")}</div>
                     <div class="dashboard-card-meta">${new Date(item.created_at).toLocaleString('it-IT')}</div>
                 </div>
-                <button class="btn danger" onclick="deleteDashboardComment('${item.id}')">Elimina</button>
+                <span class="dashboard-card-buttons">
+                    <button class="btn outline" ${index === 0 ? "disabled" : ""} onclick="moveDashboardListItem('comment', ${index}, ${index - 1})">Su</button>
+                    <button class="btn outline" ${index === comments.length - 1 ? "disabled" : ""} onclick="moveDashboardListItem('comment', ${index}, ${index + 1})">Giu</button>
+                    <button class="btn danger" onclick="deleteDashboardComment('${item.id}')">Elimina</button>
+                </span>
             </div>
         </article>
     `).join("");
@@ -1031,15 +1062,20 @@ function renderDashboardNotes(notes) {
         list.innerHTML = `<p class="empty-state">Nessuna nota ancora.</p>`;
         return;
     }
-    list.innerHTML = notes.map(item => `
-        <article class="dashboard-note-card">
+    list.innerHTML = notes.map((item, index) => `
+        <article class="dashboard-note-card dashboard-movable-card" draggable="true" ondragstart="dashboardListDragStart(event, 'note', ${index})" ondragover="event.preventDefault()" ondrop="dashboardListDrop(event, 'note', ${index})">
             <div class="dashboard-card-actions">
+                <span class="drag-handle" title="Trascina nota">::</span>
                 <div>
                     <h3 style="margin:0 0 6px;">${escapeHTML(item.title)}</h3>
                     ${item.body ? `<div style="line-height:1.55;">${escapeHTML(item.body).replace(/\n/g, "<br>")}</div>` : ""}
                     <div class="dashboard-card-meta">${new Date(item.created_at).toLocaleString('it-IT')}</div>
                 </div>
-                <button class="btn danger" onclick="deleteDashboardNote('${item.id}')">Elimina</button>
+                <span class="dashboard-card-buttons">
+                    <button class="btn outline" ${index === 0 ? "disabled" : ""} onclick="moveDashboardListItem('note', ${index}, ${index - 1})">Su</button>
+                    <button class="btn outline" ${index === notes.length - 1 ? "disabled" : ""} onclick="moveDashboardListItem('note', ${index}, ${index + 1})">Giu</button>
+                    <button class="btn danger" onclick="deleteDashboardNote('${item.id}')">Elimina</button>
+                </span>
             </div>
         </article>
     `).join("");
@@ -1062,16 +1098,25 @@ function loadSheets() {
             saveUserConfigValue("sheets", sheets);
         }
     }
-    const normalized = sheets.map(sheet => ({
+    let changed = false;
+    const orderCounters = {};
+    const normalized = sheets.map(sheet => {
+        const parentId = sheet.parentId || "";
+        const fallbackOrder = orderCounters[parentId] || 0;
+        orderCounters[parentId] = fallbackOrder + 1;
+        if (sheet.order === undefined || sheet.order === null) changed = true;
+        return {
         id: sheet.id || `sheet_${Date.now()}_${Math.random().toString(16).slice(2)}`,
         title: sheet.title || "Foglio senza titolo",
         body: sheet.body || (Array.isArray(sheet.blocks) ? sheet.blocks.map(block => [block.title, block.body].filter(Boolean).join("\n")).filter(Boolean).join("\n\n") : ""),
-        parentId: sheet.parentId || "",
+        parentId,
+        order: Number.isFinite(Number(sheet.order)) ? Number(sheet.order) : fallbackOrder,
         created_at: sheet.created_at || new Date().toISOString(),
         updated_at: sheet.updated_at || new Date().toISOString()
-    }));
+    };
+    });
     const cleaned = removeAutoBlankSheets(normalized);
-    if (cleaned.length !== normalized.length) {
+    if (changed || cleaned.length !== normalized.length) {
         localStorage.setItem(sheetsStorageKey(), JSON.stringify(cleaned));
         localStorage.setItem(sheetsBackupKey(), JSON.stringify(cleaned));
         saveUserConfigValue("sheets", cleaned);
@@ -1102,6 +1147,7 @@ function mergeSheetsCollections(localSheets, remoteSheets) {
             title: sheet.title || "Foglio senza titolo",
             body: sheet.body || (Array.isArray(sheet.blocks) ? sheet.blocks.map(block => [block.title, block.body].filter(Boolean).join("\n")).filter(Boolean).join("\n\n") : ""),
             parentId: sheet.parentId || "",
+            order: Number.isFinite(Number(sheet.order)) ? Number(sheet.order) : 0,
             created_at: sheet.created_at || new Date().toISOString(),
             updated_at: sheet.updated_at || new Date().toISOString()
         }))
@@ -1128,15 +1174,32 @@ function saveSheets(sheets) {
 function sheetChildren(sheets, parentId = "") {
     return sheets
         .filter(sheet => (sheet.parentId || "") === parentId)
-        .sort((a, b) => (a.created_at || "").localeCompare(b.created_at || ""));
+        .sort((a, b) => {
+            const orderDiff = (Number(a.order) || 0) - (Number(b.order) || 0);
+            return orderDiff || (a.created_at || "").localeCompare(b.created_at || "");
+        });
 }
 
-function createSheetObject(parentId = "", title = "Nuovo foglio") {
+function nextSheetOrder(sheets, parentId = "") {
+    const children = sheets.filter(sheet => (sheet.parentId || "") === parentId);
+    if (!children.length) return 0;
+    return Math.max(...children.map(sheet => Number(sheet.order) || 0)) + 1;
+}
+
+function normalizeSheetSiblingOrders(sheets, parentId = "") {
+    sheetChildren(sheets, parentId).forEach((sheet, index) => {
+        const target = sheets.find(item => item.id === sheet.id);
+        if (target) target.order = index;
+    });
+}
+
+function createSheetObject(parentId = "", title = "Nuovo foglio", order = 0) {
     return {
         id: `sheet_${Date.now()}_${Math.random().toString(16).slice(2)}`,
         title,
         body: "",
         parentId,
+        order,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
     };
@@ -1177,7 +1240,7 @@ function quickAddSheet() {
     const title = prompt("Nome del nuovo foglio");
     if (!title || !title.trim()) return;
     const sheets = loadSheets();
-    const sheet = createSheetObject("", title.trim());
+    const sheet = createSheetObject("", title.trim(), nextSheetOrder(sheets, ""));
     sheets.push(sheet);
     saveSheets(sheets);
     window.location.href = `fogli.html?id=${encodeURIComponent(sheet.id)}`;
@@ -1196,7 +1259,7 @@ function createSheet(parentId = "") {
     const title = prompt("Nome del foglio");
     if (!title || !title.trim()) return;
     const sheets = loadSheets();
-    const sheet = createSheetObject(parentId, title.trim());
+    const sheet = createSheetObject(parentId, title.trim(), nextSheetOrder(sheets, parentId));
     sheets.push(sheet);
     saveSheets(sheets);
     selectSheet(sheet.id);
@@ -1227,12 +1290,17 @@ function renderSheetTree() {
     if (!container) return;
     const sheets = loadSheets();
     const renderBranch = (parentId = "", depth = 0) => sheetChildren(sheets, parentId).map(sheet => `
-        <div class="sheet-tree-item ${sheet.id === currentSheetId ? "active" : ""} ${depth ? "sheet-child" : ""}">
+        <div class="sheet-tree-item ${sheet.id === currentSheetId ? "active" : ""} ${depth ? "sheet-child" : ""}" draggable="true" ondragstart="sheetDragStart(event, '${sheet.id}')" ondragover="event.preventDefault()" ondrop="sheetDrop(event, '${sheet.id}')">
+            <span class="drag-handle" title="Trascina foglio">::</span>
             <div class="sheet-tree-main" onclick="selectSheet('${sheet.id}')">
                 <div class="sheet-tree-title">${escapeHTML(sheet.title)}</div>
                 <div class="sheet-tree-meta">${sheetChildren(sheets, sheet.id).length} sotto-fogli</div>
             </div>
-            <button class="btn outline" onclick="createSheet('${sheet.id}')">+</button>
+            <span class="sheet-row-actions">
+                <button class="btn outline" onclick="moveSheet('${sheet.id}', -1)">Su</button>
+                <button class="btn outline" onclick="moveSheet('${sheet.id}', 1)">Giu</button>
+                <button class="btn outline" onclick="createSheet('${sheet.id}')">+</button>
+            </span>
         </div>
         ${renderBranch(sheet.id, depth + 1)}
     `).join("");
@@ -1253,16 +1321,76 @@ function renderSheetChildren() {
         <div class="sheet-children-box">
         <div class="sheet-section-label">Sotto-fogli</div>
         ${children.map(child => `
-            <div class="task-row" style="grid-template-columns:minmax(0,1fr) auto;">
+            <div class="task-row" style="grid-template-columns:24px minmax(0,1fr) auto;">
+                <span class="drag-handle" draggable="true" ondragstart="sheetDragStart(event, '${child.id}')" ondragover="event.preventDefault()" ondrop="sheetDrop(event, '${child.id}')" title="Trascina sotto-foglio">::</span>
                 <span>
                     <span class="task-title">${escapeHTML(child.title)}</span>
                     <span class="task-meta">${sheetChildren(sheets, child.id).length} sotto-fogli interni</span>
                 </span>
-                <button class="btn outline" onclick="selectSheet('${child.id}')">Apri</button>
+                <span class="sheet-row-actions">
+                    <button class="btn outline" onclick="moveSheet('${child.id}', -1)">Su</button>
+                    <button class="btn outline" onclick="moveSheet('${child.id}', 1)">Giu</button>
+                    <button class="btn outline" onclick="selectSheet('${child.id}')">Apri</button>
+                </span>
             </div>
         `).join("")}
         </div>
     `;
+}
+
+function moveSheet(sheetId, direction) {
+    const sheets = loadSheets();
+    const sheet = sheets.find(item => item.id === sheetId);
+    if (!sheet) return;
+    const parentId = sheet.parentId || "";
+    const siblings = sheetChildren(sheets, parentId);
+    const from = siblings.findIndex(item => item.id === sheetId);
+    const to = from + direction;
+    if (from < 0 || to < 0 || to >= siblings.length) return;
+    const [item] = siblings.splice(from, 1);
+    siblings.splice(to, 0, item);
+    siblings.forEach((sibling, index) => {
+        const target = sheets.find(item => item.id === sibling.id);
+        if (target) {
+            target.order = index;
+            target.updated_at = new Date().toISOString();
+        }
+    });
+    saveSheets(sheets);
+    renderSheetTree();
+    renderSheetChildren();
+}
+
+function sheetDragStart(event, sheetId) {
+    event.dataTransfer.setData("text/plain", sheetId);
+    event.dataTransfer.effectAllowed = "move";
+}
+
+function sheetDrop(event, targetSheetId) {
+    event.preventDefault();
+    const sourceSheetId = event.dataTransfer.getData("text/plain");
+    if (!sourceSheetId || sourceSheetId === targetSheetId) return;
+    const sheets = loadSheets();
+    const source = sheets.find(item => item.id === sourceSheetId);
+    const target = sheets.find(item => item.id === targetSheetId);
+    if (!source || !target || (source.parentId || "") !== (target.parentId || "")) return;
+    const parentId = source.parentId || "";
+    const siblings = sheetChildren(sheets, parentId);
+    const from = siblings.findIndex(item => item.id === sourceSheetId);
+    const to = siblings.findIndex(item => item.id === targetSheetId);
+    if (from < 0 || to < 0) return;
+    const [item] = siblings.splice(from, 1);
+    siblings.splice(to, 0, item);
+    siblings.forEach((sibling, index) => {
+        const original = sheets.find(item => item.id === sibling.id);
+        if (original) {
+            original.order = index;
+            original.updated_at = new Date().toISOString();
+        }
+    });
+    saveSheets(sheets);
+    renderSheetTree();
+    renderSheetChildren();
 }
 
 function getCurrentSheet() {
@@ -2839,8 +2967,7 @@ async function caricaRoutineDiOggi() {
             }));
 
         savePendingTasks(pending);
-        const rows = [...rowsDovute, ...rowsPending]
-            .sort((a, b) => (a.orario || "99:99").localeCompare(b.orario || "99:99"));
+        const rows = [...rowsDovute, ...rowsPending];
         window.todayStatsTasks = rows.map(row => ({
             tipo: row.tipo,
             nome: row.nome,

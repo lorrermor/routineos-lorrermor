@@ -4,9 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RoutineOS Dashboard</title>
-    <link rel="icon" type="image/x-icon" href="favicon-v2.ico">
-    <link rel="manifest" href="manifest.json">
-    <link rel="stylesheet" href="styles.css?v=routineos-visual-9">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+    <link rel="icon" href="favicon-v2.ico">
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+    <link rel="manifest" href="site.webmanifest">
+    <meta name="theme-color" content="#081724">
+    <link rel="stylesheet" href="styles.css?v=routineos-visual-10">
     <style>
         .shop-badge {
             background: var(--success);
@@ -74,6 +78,17 @@
             justify-content: space-between;
             gap: 12px;
             align-items: flex-start;
+            flex-wrap: wrap;
+        }
+        .dashboard-card-actions > div {
+            flex: 1;
+            min-width: 0;
+        }
+        .dashboard-card-buttons {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
         }
         .dashboard-input {
             width: 100%;
@@ -188,7 +203,7 @@
     </div>
     <script src="config.js?v=routineos-config-1"></script>
 
-    <script src="script.js?v=routineos-api-14"></script>
+    <script src="script.js?v=routineos-api-15"></script>
 </body>
 </html>
 

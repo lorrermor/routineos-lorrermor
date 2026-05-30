@@ -46,6 +46,7 @@ def required_env(name: str) -> str:
 URL_SB = required_env("SUPABASE_URL")
 KEY_SB = required_env("SUPABASE_KEY")
 SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_SERVICE_KEY", "")
+CRON_SECRET = os.environ.get("CRON_SECRET", "")
 CORS_ORIGINS = [
     origin.strip()
     for origin in os.environ.get("CORS_ORIGINS", "http://127.0.0.1:8766,http://localhost:8766,http://127.0.0.1:5500,http://localhost:5500").split(",")
@@ -1222,7 +1223,8 @@ def list_routine(authorization: str = Header(None), user_id: str = Depends(get_u
         "routine_piani",
         user_id,
         get_auth_token(authorization),
-        "nome,frequenza"
+        "nome,frequenza",
+        {"order": "id.asc"}
     )
     return [item["nome"] for item in righe]
 
@@ -1293,7 +1295,8 @@ def list_sottoroutine(authorization: str = Header(None), user_id: str = Depends(
         "sottoroutine_piani",
         user_id,
         get_auth_token(authorization),
-        "nome,routine_parent"
+        "nome,routine_parent",
+        {"order": "id.asc"}
     )
 
 
@@ -1427,6 +1430,37 @@ def get_info():
         "stagione": stag,
         "data": f"{now.day} {mesi[mese - 1]} {now.year}",
         "giorno": logica.get_today_name()
+    }
+
+
+@app.post("/system/run-daily-updates")
+async def run_daily_updates(x_cron_secret: str = Header(None)):
+    expected_secret = CRON_SECRET or SERVICE_ROLE_KEY
+    if not expected_secret or x_cron_secret != expected_secret:
+        raise HTTPException(status_code=403, detail="Cron non autorizzato.")
+    if not SERVICE_ROLE_KEY:
+        raise HTTPException(status_code=500, detail="SUPABASE_SERVICE_ROLE_KEY non configurata.")
+
+    users = admin_list_users(max_pages=50)
+    total = 0
+    updated = 0
+    errors = []
+    for user in users:
+        user_id = str(user.get("id") or "")
+        if not user_id:
+            continue
+        total += 1
+        try:
+            if logica.check_daily_update(user_id):
+                updated += 1
+        except Exception as e:
+            errors.append({"user_id": user_id, "error": str(e)})
+
+    return {
+        "status": "success",
+        "checked_users": total,
+        "updated_users": updated,
+        "errors": errors[:20]
     }
 
 

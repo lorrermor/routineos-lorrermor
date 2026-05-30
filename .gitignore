@@ -8,3 +8,5 @@ __pycache__/
 backend/__pycache__/
 *.log
 *.local
+.netlify/
+.asset-pack/
