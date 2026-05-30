@@ -144,11 +144,31 @@ function nomeGiornoSettimana(data = new Date()) {
     return giorniSettimana[(data.getDay() + 6) % 7];
 }
 
+function normalizePlannerLabel(value) {
+    return String(value || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+}
+
+function activePlannerLabelsForDate(plan, dateIso, weekdayLabel) {
+    const labels = new Set([normalizePlannerLabel(weekdayLabel)]);
+    const customDays = Array.isArray(plan?.giorni) ? plan.giorni.filter(Boolean) : [];
+    const normalizedDays = customDays.map(normalizePlannerLabel);
+    const hasWeekday = normalizedDays.includes(normalizePlannerLabel(weekdayLabel));
+    if (!hasWeekday && customDays.length && plan?.inizio) {
+        const start = new Date(`${plan.inizio}T00:00:00`);
+        const today = new Date(`${dateIso}T00:00:00`);
+        const diff = Math.floor((today - start) / 86400000);
+        if (Number.isFinite(diff) && diff >= 0) {
+            labels.add(normalizePlannerLabel(customDays[diff % customDays.length]));
+        }
+    }
+    return labels;
+}
+
 function settimanaDelMese(data = new Date()) {
     return Math.min(4, Math.ceil(data.getDate() / 7));
 }
 
-let currentPlan = { nome: "", inizio: "", fine: "", pasti: [] };
+let currentPlan = { nome: "", inizio: "", fine: "", giorni: [...giorniSettimana], pasti: [] };
 
 let originalFilename = null;
 
@@ -336,10 +356,8 @@ async function initDashboard() {
 
         const display = document.getElementById('active-menu-display');
         if (pianoAttivo) {
-            const pastiOggi = pianoAttivo.pasti.filter(p => 
-                p.giorno.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") === 
-                oggiNomeServer.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-            );
+            const labelsOggi = activePlannerLabelsForDate(pianoAttivo, oggiISO, oggiNomeServer);
+            const pastiOggi = (pianoAttivo.pasti || []).filter(p => labelsOggi.has(normalizePlannerLabel(p.giorno)));
             
             // PASSIAMO IL VALORE giaAnnullato alla funzione render
             renderMenuDashboard(pastiOggi, giaAnnullato);
@@ -1538,8 +1556,19 @@ function completeExtraShoppingItem(cardId) {
     calcolaSpesa(inv);
 }
 
-let exportPortableData = { routine: [], sottoroutine: [], piani: [], inventario: [], spesa_extra: [] };
+let exportPortableData = { routine: [], sottoroutine: [], piani: [], inventario: [], spesa_extra: [], dashboard_comments: [], dashboard_notes: [], sheets: [] };
 let importPortableData = null;
+
+const portableGroups = [
+    { key: "routine", title: "Routine" },
+    { key: "sottoroutine", title: "Sottoroutine" },
+    { key: "piani", title: "Piani menu" },
+    { key: "inventario", title: "Inventario" },
+    { key: "spesa_extra", title: "Spesa extra" },
+    { key: "dashboard_comments", title: "Commenti dashboard" },
+    { key: "dashboard_notes", title: "Note dashboard" },
+    { key: "sheets", title: "Fogli" }
+];
 
 async function initDataPortability() {
     await loadPortableData();
@@ -1573,7 +1602,10 @@ async function loadPortableData() {
             sottoroutine,
             piani,
             inventario: Object.entries(inventario || {}).map(([nome, item]) => ({ nome, ...item })),
-            spesa_extra: portableExtraShoppingColumns()
+            spesa_extra: portableExtraShoppingColumns(),
+            dashboard_comments: readStoredList(dashboardCommentsKey()),
+            dashboard_notes: readStoredList(dashboardNotesKey()),
+            sheets: loadSheets()
         };
         if (status) status.textContent = "Dati pronti per esportazione o importazione.";
     } catch (e) {
@@ -1599,6 +1631,9 @@ async function loadMenuPlanDetails(menuList) {
 function portableLabel(type, item) {
     if (type === "inventario") return item.nome || item.name || "Ingrediente";
     if (type === "spesa_extra") return item.title || "Colonna spesa extra";
+    if (type === "dashboard_comments") return item.text ? item.text.slice(0, 48) : "Commento";
+    if (type === "dashboard_notes") return item.title || "Nota";
+    if (type === "sheets") return item.title || "Foglio";
     return item.nome || item.filename || item.name || "Elemento senza nome";
 }
 
@@ -1623,14 +1658,7 @@ function portableExtraShoppingColumns() {
 function renderPortableExportSelectors() {
     const root = document.getElementById("export-data-groups");
     if (!root) return;
-    const groups = [
-        { key: "routine", title: "Routine" },
-        { key: "sottoroutine", title: "Sottoroutine" },
-        { key: "piani", title: "Piani menu" },
-        { key: "inventario", title: "Inventario" },
-        { key: "spesa_extra", title: "Spesa extra" }
-    ];
-    root.innerHTML = groups.map(group => {
+    root.innerHTML = portableGroups.map(group => {
         const items = exportPortableData[group.key] || [];
         return `
             <section class="portable-group">
@@ -1664,7 +1692,7 @@ function togglePortableGroup(type, checked) {
 }
 
 function selectedPortableData() {
-    const data = { routine: [], sottoroutine: [], piani: [], inventario: [], spesa_extra: [] };
+    const data = Object.fromEntries(portableGroups.map(group => [group.key, []]));
     document.querySelectorAll("[data-export-type]").forEach(input => {
         if (!input.checked) return;
         const type = input.dataset.exportType;
@@ -1761,6 +1789,9 @@ function portableSummary(type, item) {
         const count = (item.cards || []).filter(card => (card.text || "").trim()).length;
         return `${count} card - colore ${item.color || "-"}`;
     }
+    if (type === "dashboard_comments") return item.created_at ? new Date(item.created_at).toLocaleString("it-IT") : "Commento dashboard";
+    if (type === "dashboard_notes") return item.created_at ? new Date(item.created_at).toLocaleString("it-IT") : "Nota dashboard";
+    if (type === "sheets") return `${(item.body || "").length} caratteri - ${item.parentId ? "sottofoglio" : "foglio principale"}`;
     return "";
 }
 
@@ -1801,6 +1832,9 @@ function portableDetails(type, item) {
             .filter(Boolean)
             .join("\n") || "Colonna vuota";
     }
+    if (type === "dashboard_comments") return item.text || "";
+    if (type === "dashboard_notes") return [item.title || "Nota", item.body || item.description || ""].filter(Boolean).join("\n");
+    if (type === "sheets") return [item.title || "Foglio", item.body || ""].filter(Boolean).join("\n");
     return JSON.stringify(item, null, 2);
 }
 
@@ -1980,7 +2014,10 @@ function portableTypeTitle(type) {
         sottoroutine: "Sottoroutine",
         piani: "Piani menu",
         inventario: "Inventario",
-        spesa_extra: "Spesa extra"
+        spesa_extra: "Spesa extra",
+        dashboard_comments: "Commenti dashboard",
+        dashboard_notes: "Note dashboard",
+        sheets: "Fogli"
     };
     return titles[type] || type;
 }
@@ -2067,7 +2104,7 @@ function parseCsv(text) {
 }
 
 function portableFromRows(rows) {
-    const data = { routine: [], sottoroutine: [], piani: [], inventario: [], spesa_extra: [] };
+    const data = Object.fromEntries(portableGroups.map(group => [group.key, []]));
     const headerRowIndex = rows.findIndex(row => row.some(cell => String(cell || "").toLowerCase() === "categoria"));
     const effectiveRows = headerRowIndex >= 0 ? rows.slice(headerRowIndex) : rows;
     const headers = (effectiveRows[0] || []).map(cell => String(cell || "").toLowerCase());
@@ -2138,21 +2175,17 @@ function normalizePortableData(data = {}) {
         sottoroutine: Array.isArray(data.sottoroutine) ? data.sottoroutine : [],
         piani: Array.isArray(data.piani) ? data.piani : [],
         inventario: Array.isArray(data.inventario) ? data.inventario : [],
-        spesa_extra: Array.isArray(data.spesa_extra) ? data.spesa_extra : []
+        spesa_extra: Array.isArray(data.spesa_extra) ? data.spesa_extra : [],
+        dashboard_comments: Array.isArray(data.dashboard_comments) ? data.dashboard_comments : [],
+        dashboard_notes: Array.isArray(data.dashboard_notes) ? data.dashboard_notes : [],
+        sheets: Array.isArray(data.sheets) ? data.sheets : []
     };
 }
 
 function renderImportPreview(data) {
     const preview = document.getElementById("import-preview");
     if (!preview) return;
-    const groups = [
-        ["routine", "Routine"],
-        ["sottoroutine", "Sottoroutine"],
-        ["piani", "Piani menu"],
-        ["inventario", "Inventario"],
-        ["spesa_extra", "Spesa extra"]
-    ];
-    preview.innerHTML = groups.map(([key, title]) => `
+    preview.innerHTML = portableGroups.map(({ key, title }) => `
         <label class="import-preview-row">
             <input type="checkbox" data-import-type="${key}" checked>
             <span><strong>${title}</strong> ${(data[key] || []).length} elementi</span>
@@ -2219,6 +2252,17 @@ async function importPortableDataSet(portableData, selectedTypes, status = null,
         if (selected.has("spesa_extra") && dataToImport.spesa_extra.length) {
             importExtraShoppingColumns(dataToImport.spesa_extra);
         }
+        if (selected.has("dashboard_comments") && dataToImport.dashboard_comments.length) {
+            const comments = [...dataToImport.dashboard_comments, ...readStoredList(dashboardCommentsKey())];
+            saveDashboardComments(mergePortableItems(comments));
+        }
+        if (selected.has("dashboard_notes") && dataToImport.dashboard_notes.length) {
+            const notes = [...dataToImport.dashboard_notes, ...readStoredList(dashboardNotesKey())];
+            saveDashboardNotes(mergePortableItems(notes));
+        }
+        if (selected.has("sheets") && dataToImport.sheets.length) {
+            saveSheets(mergeSheetsCollections(loadSheets(), dataToImport.sheets));
+        }
         await loadPortableData();
         renderPortableExportSelectors();
         if (status) status.textContent = errors.length
@@ -2269,6 +2313,16 @@ function importExtraShoppingColumns(columns) {
 
     saveExtraShoppingColumns(nextColumns);
     saveExtraShopping(nextCards);
+}
+
+function mergePortableItems(items) {
+    const map = new Map();
+    items.forEach(item => {
+        if (!item) return;
+        const key = item.id || `${item.title || item.text || "item"}:${item.created_at || ""}`;
+        map.set(key, item);
+    });
+    return [...map.values()];
 }
 
 function pendingTasksKey() {
@@ -2937,7 +2991,7 @@ async function initPlanner() {
         sel.onchange = async (e) => {
             if (e.target.value === "NEW") {
                 originalFilename = null;
-                currentPlan = { nome: "", inizio: "", fine: "", pasti: [] };
+                currentPlan = { nome: "", inizio: "", fine: "", giorni: [...giorniSettimana], pasti: [] };
                 if (btnElimina) btnElimina.style.display = "none";
             } else {
                 originalFilename = e.target.value;
@@ -2965,6 +3019,7 @@ function aggiornaCampiPlanner() {
     if(n) n.value = currentPlan.nome || "";
     if(s) s.value = currentPlan.inizio || "";
     if(e) e.value = currentPlan.fine || "";
+    ensurePlannerDays();
     renderGiorni();
 }
 
@@ -2996,6 +3051,7 @@ async function saveFullPlan() {
     currentPlan.inizio = inizio;
 
     currentPlan.fine = fine;
+    ensurePlannerDays();
 
     sincronizzaUnitaPiano(currentPlan);
 
@@ -3052,6 +3108,7 @@ function aggiornaCampiPlanner() {
     document.getElementById('plan-start').value = currentPlan.inizio || "";
 
     document.getElementById('plan-end').value = currentPlan.fine || "";
+    ensurePlannerDays();
 
     renderGiorni();
 
@@ -3183,6 +3240,83 @@ function selectPlannerMove(event, payload) {
     renderGiorni();
 }
 
+function ensurePlannerDays() {
+    if (!currentPlan || typeof currentPlan !== "object") currentPlan = { nome: "", inizio: "", fine: "", pasti: [] };
+    if (!Array.isArray(currentPlan.pasti)) currentPlan.pasti = [];
+    const saved = Array.isArray(currentPlan.giorni) ? currentPlan.giorni.filter(Boolean) : [];
+    const used = currentPlan.pasti.map(pasto => pasto.giorno).filter(Boolean);
+    const days = [...saved, ...used].filter((day, index, arr) => arr.indexOf(day) === index);
+    currentPlan.giorni = days.length ? days : [...giorniSettimana];
+    return currentPlan.giorni;
+}
+
+function renderPlannerDaysEditor() {
+    const editor = document.getElementById("planner-days-editor");
+    if (!editor) return;
+    const days = ensurePlannerDays();
+    editor.innerHTML = days.map((day, index) => `
+        <span class="planner-day-chip">
+            <input value="${escapeHTML(day)}" onchange="renamePlannerDay(${index}, this.value)" title="Nome sezione">
+            <button type="button" onclick="removePlannerDay(${index})" title="Elimina sezione">x</button>
+        </span>
+    `).join("");
+}
+
+function addPlannerDay(label) {
+    const value = String(label || "").trim();
+    if (!value) return;
+    const days = ensurePlannerDays();
+    if (!days.includes(value)) days.push(value);
+    currentPlan.giorni = days;
+    renderGiorni();
+}
+
+function addPlannerDayFromInput() {
+    const input = document.getElementById("planner-day-label");
+    addPlannerDay(input?.value || "");
+    if (input) input.value = "";
+}
+
+function renamePlannerDay(index, nextValue) {
+    const days = ensurePlannerDays();
+    const oldValue = days[index];
+    const value = String(nextValue || "").trim() || oldValue;
+    if (!oldValue) return;
+    days[index] = value;
+    currentPlan.pasti.forEach(pasto => {
+        if (pasto.giorno === oldValue) pasto.giorno = value;
+    });
+    currentPlan.giorni = days.filter((day, idx, arr) => day && arr.indexOf(day) === idx);
+    renderGiorni();
+}
+
+function removePlannerDay(index) {
+    const days = ensurePlannerDays();
+    const value = days[index];
+    if (!value) return;
+    const hasMeals = currentPlan.pasti.some(pasto => pasto.giorno === value);
+    if (hasMeals && !confirm(`Eliminare "${value}" e i suoi pasti dal piano?`)) return;
+    currentPlan.giorni = days.filter((_, idx) => idx !== index);
+    currentPlan.pasti = currentPlan.pasti.filter(pasto => pasto.giorno !== value);
+    if (!currentPlan.giorni.length) currentPlan.giorni = [...giorniSettimana];
+    renderGiorni();
+}
+
+function resetPlannerDays() {
+    if (!confirm("Ripristinare le sezioni settimanali? I pasti fuori da questi giorni resteranno ma verranno aggiunti come sezioni extra.")) return;
+    currentPlan.giorni = [...giorniSettimana];
+    ensurePlannerDays();
+    renderGiorni();
+}
+
+function generateMonthlyPlannerDays() {
+    const count = parseInt(prompt("Quanti giorni vuoi nel piano?", "30") || "30", 10);
+    if (!Number.isFinite(count) || count < 1 || count > 62) return alert("Inserisci un numero da 1 a 62.");
+    currentPlan.giorni = Array.from({ length: count }, (_, index) => `Giorno ${index + 1}`);
+    ensurePlannerDays();
+    renderGiorni();
+}
+
 function readPlannerDrag(event) {
     try {
         return JSON.parse(event.dataTransfer.getData("application/json") || "{}");
@@ -3275,26 +3409,39 @@ function dropPlannerSelection(event, type, pIdx = null, ptIdx = null, toIndex = 
 
 function plannerDropButton(type, pIdx = null, ptIdx = null, toIndex = null, giorno = "") {
     if (!plannerMoveSelection || plannerMoveSelection.type !== type) return "";
-    return `<button class="planner-drop-btn" onclick="dropPlannerSelection(event, '${type}', ${pIdx === null ? 'null' : pIdx}, ${ptIdx === null ? 'null' : ptIdx}, ${toIndex === null ? 'null' : toIndex}, '${escapeHTML(giorno)}')">Qui</button>`;
+    return `<button class="planner-drop-btn" onclick="dropPlannerSelection(event, '${type}', ${pIdx === null ? 'null' : pIdx}, ${ptIdx === null ? 'null' : ptIdx}, ${toIndex === null ? 'null' : toIndex}, decodeURIComponent('${safeEncoded(giorno)}'))">Qui</button>`;
+}
+
+function plannerDayDomId(day) {
+    return `content-${safeEncoded(day)}`;
+}
+
+function plannerDayArg(day) {
+    return `decodeURIComponent('${safeEncoded(day)}')`;
 }
 
 function renderGiorni() {
     const container = document.getElementById('giorni-container');
     if(!container) return;
+    const dayLabels = ensurePlannerDays();
+    renderPlannerDaysEditor();
     
     // RENDER DELLE SEZIONI GIORNO
-    container.innerHTML = giorniSettimana.map(g => `
+    container.innerHTML = dayLabels.map(g => {
+        const dayArg = plannerDayArg(g);
+        return `
         <div class="day-section">
             <div class="day-header" style="display:flex; justify-content:space-between; align-items:center;">
-                <span>${g}</span>
+                <span>${escapeHTML(g)}</span>
                 <div style="display:flex; gap:5px;">
-                    <button class="btn-cp" onclick="copyDay('${g}')" title="Copia Giorno">Copia</button>
-                    <button class="btn-cp" onclick="pasteDay('${g}')" title="Incolla Giorno">Incolla</button>
+                    <button class="btn-cp" onclick="copyDay(${dayArg})" title="Copia sezione">Copia</button>
+                    <button class="btn-cp" onclick="pasteDay(${dayArg})" title="Incolla sezione">Incolla</button>
                 </div>
             </div>
-            <div id="content-${g}"></div>
-            <button class="btn outline" onclick="addPasto('${g}')" style="width:100%; margin-top:10px;">+ Pasto</button>
-        </div>`).join("");
+            <div id="${plannerDayDomId(g)}"></div>
+            <button class="btn outline" onclick="addPasto(${dayArg})" style="width:100%; margin-top:10px;">+ Pasto</button>
+        </div>`;
+    }).join("");
 
     // RENDER DEI PASTI
     const dayCounters = {};
@@ -3305,12 +3452,12 @@ function renderGiorni() {
         pDiv.className = 'meal-box drag-drop-target';
         pDiv.style = "background:#ffffff; padding:15px; border-radius:8px; margin-bottom:15px; border:1px solid #e2e8f0; position:relative; box-shadow:0 1px 2px rgba(15,23,42,0.06);";
         pDiv.setAttribute('ondragover', 'event.preventDefault()');
-        pDiv.setAttribute('ondrop', `dropMeal(event, '${pasto.giorno}', ${dayIndex})`);
+        pDiv.setAttribute('ondrop', `dropMeal(event, decodeURIComponent('${safeEncoded(pasto.giorno)}'), ${dayIndex})`);
         
         pDiv.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                 <div style="display:flex; align-items:center; gap:8px;">
-                    <span class="drag-handle" draggable="true" onclick="selectPlannerMove(event, {type:'meal', pIdx:${pIdx}, giorno:'${pasto.giorno}', dayIndex:${dayIndex}})" ondragstart="startPlannerDrag(event, {type:'meal', pIdx:${pIdx}, giorno:'${pasto.giorno}', dayIndex:${dayIndex}})" title="Trascina pasto">::</span>
+                    <span class="drag-handle" draggable="true" onclick="selectPlannerMove(event, {type:'meal', pIdx:${pIdx}, giorno:decodeURIComponent('${safeEncoded(pasto.giorno)}'), dayIndex:${dayIndex}})" ondragstart="startPlannerDrag(event, {type:'meal', pIdx:${pIdx}, giorno:decodeURIComponent('${safeEncoded(pasto.giorno)}'), dayIndex:${dayIndex}})" title="Trascina pasto">::</span>
                     <input type="text" value="${escapeHTML(pasto.nome || "")}" onchange="currentPlan.pasti[${pIdx}].nome=this.value" style="font-weight:bold; color:var(--accent); background:transparent; border:none; border-bottom:1px solid #444;">
                     ${plannerDropButton('meal', null, null, dayIndex, pasto.giorno)}
                     <button class="btn-cp" onclick="copyMealByIndex(${pIdx})" title="Copia Pasto">Copia</button>
@@ -3321,7 +3468,7 @@ function renderGiorni() {
             <div id="piatti-${pIdx}"></div>
             <button class="btn outline" onclick="addPiatto(${pIdx})" style="font-size:0.7rem; width:100%;">+ Aggiungi Piatto</button>`;
         
-        const target = document.getElementById(`content-${pasto.giorno}`);
+        const target = document.getElementById(plannerDayDomId(pasto.giorno));
         if(target) target.appendChild(pDiv);
 
         // RENDER DEI PIATTI

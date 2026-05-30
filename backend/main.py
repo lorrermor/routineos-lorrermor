@@ -280,7 +280,9 @@ def lightweight_profile_metadata(profile_data: dict) -> dict:
     allowed = {
         "nickname", "bio", "location", "cover_color", "visibility",
         "status", "links", "connections", "share_menu",
-        "share_routines", "share_sottoroutines"
+        "share_routines", "share_sottoroutines", "share_inventory",
+        "share_extra_shopping", "share_comments", "share_notes",
+        "share_sheets"
     }
     return {key: profile_data.get(key) for key in allowed if key in profile_data}
 
@@ -651,7 +653,9 @@ async def update_profile_social(data: dict, authorization: str = Header(None), u
     allowed = {
         "nickname", "bio", "location", "avatar", "cover_color",
         "visibility", "status", "links", "connections", "share_menu",
-        "share_routines", "share_sottoroutines"
+        "share_routines", "share_sottoroutines", "share_inventory",
+        "share_extra_shopping", "share_comments", "share_notes",
+        "share_sheets"
     }
     cleaned = {key: profile_data.get(key) for key in allowed if key in profile_data}
 

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RoutineOS - Planner Professionale</title>
     <link rel="icon" type="image/x-icon" href="favicon-v2.ico">
-    <link rel="stylesheet" href="styles.css?v=routineos-visual-8">
+    <link rel="stylesheet" href="styles.css?v=routineos-visual-9">
     <style>
         .day-section {
             background: var(--card-bg);
@@ -68,7 +68,7 @@
         <header style="display:flex; align-items:center; justify-content:space-between; margin-bottom:30px; padding: 10px 0;">
             <div style="display:flex; align-items:center; gap:20px;">
                 <button class="btn outline" onclick="window.location.href='index.html'">Home</button>
-                <h1 style="margin:0;">Planner Settimanale</h1>
+                <h1 style="margin:0;">Planner Menu</h1>
             </div>
             <button class="btn danger" onclick="logout()">↪ Logout</button>
         </header>
@@ -103,6 +103,24 @@
             </div>
         </section>
 
+        <section class="card planner-sections-card">
+            <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap;">
+                <div>
+                    <h3 style="margin:0; color: var(--dim); font-size: 0.9rem; text-transform: uppercase;">2. Sezioni del piano</h3>
+                    <p style="color:var(--dim); margin:6px 0 0; font-size:.86rem;">Usa giorni, settimane, date o nomi liberi: puoi creare un piano settimanale, mensile o completamente personalizzato.</p>
+                </div>
+                <span style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <button class="btn outline" onclick="resetPlannerDays()">Settimana</button>
+                    <button class="btn outline" onclick="generateMonthlyPlannerDays()">Mensile</button>
+                </span>
+            </div>
+            <div class="planner-day-tools" style="display:flex; gap:10px; margin-top:14px; flex-wrap:wrap;">
+                <input id="planner-day-label" placeholder="Es: Giorno 8, Settimana 2, 15 giugno" style="flex:1; min-width:220px;">
+                <button class="btn primary" onclick="addPlannerDayFromInput()">+ Sezione</button>
+            </div>
+            <div id="planner-days-editor" class="planner-days-editor"></div>
+        </section>
+
         <section id="giorni-container" style="margin-top: 20px;"></section>
         
         <footer class="actions-footer">
@@ -118,7 +136,7 @@
     <datalist id="lista-ingredienti-inventario"></datalist>
     <script src="config.js?v=routineos-config-1"></script>
 
-    <script src="script.js?v=routineos-api-12"></script>
+    <script src="script.js?v=routineos-api-13"></script>
 
     <script>
         // Memoria per il copia/incolla
@@ -166,7 +184,7 @@ async function setupPlanner() {
             const val = e.target.value;
             if (val === "NEW") {
                 originalFilename = null;
-                currentPlan = { nome: "", inizio: "", fine: "", pasti: [] };
+                currentPlan = { nome: "", inizio: "", fine: "", giorni: [...giorniSettimana], pasti: [] };
                 document.getElementById('btn-elimina-piano').style.display = "none";
             } else {
                 originalFilename = val;
@@ -183,7 +201,7 @@ async function setupPlanner() {
         };
 
         // Inizializzazione pagina vuota
-        currentPlan = { nome: "", inizio: "", fine: "", pasti: [] };
+        currentPlan = { nome: "", inizio: "", fine: "", giorni: [...giorniSettimana], pasti: [] };
         renderGiorni();
 
     } catch (e) {

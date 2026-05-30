@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RoutineOS - Profilo</title>
     <link rel="icon" type="image/x-icon" href="favicon-v2.ico">
-    <link rel="stylesheet" href="styles.css?v=routineos-visual-8">
+    <link rel="stylesheet" href="styles.css?v=routineos-visual-9">
     <style>
         .profile-stack { display:grid; gap:18px; max-width:980px; }
         .profile-hero { padding:0; overflow:hidden; }
@@ -205,6 +205,11 @@
                             <label><input id="share-menu" type="checkbox"> Menu</label>
                             <label><input id="share-routines" type="checkbox"> Routine</label>
                             <label><input id="share-sottoroutines" type="checkbox"> Sottoroutine</label>
+                            <label><input id="share-inventory" type="checkbox"> Inventario</label>
+                            <label><input id="share-extra-shopping" type="checkbox"> Spesa extra</label>
+                            <label><input id="share-comments" type="checkbox"> Commenti</label>
+                            <label><input id="share-notes" type="checkbox"> Note</label>
+                            <label><input id="share-sheets" type="checkbox"> Fogli</label>
                         </div>
                     </div>
                 </section>
@@ -246,6 +251,7 @@
                         </div>
                     </div>
                     <div id="connections-list" class="task-list" style="margin-top:16px;"></div>
+                    <div id="share-selection-panel" class="share-preview-panel"></div>
                     <div id="connection-share-status" style="margin-top:12px; color:var(--dim); font-size:.9rem;"></div>
                 </section>
 
@@ -347,7 +353,7 @@
     <script src="config.js?v=routineos-config-1"></script>
 
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-    <script src="script.js?v=routineos-api-12"></script>
+    <script src="script.js?v=routineos-api-13"></script>
     <script>
         let profileSocial = {
             nickname: '',
@@ -361,11 +367,28 @@
             connections: [],
             share_menu: false,
             share_routines: false,
-            share_sottoroutines: false
+            share_sottoroutines: false,
+            share_inventory: false,
+            share_extra_shopping: false,
+            share_comments: false,
+            share_notes: false,
+            share_sheets: false
         };
         let userCode = 'RO---------';
         let receivedShares = [];
         let selectedShareId = '';
+        let pendingShareConnectionId = '';
+
+        const sharePreferenceMap = [
+            ['share-menu', 'share_menu', 'piani'],
+            ['share-routines', 'share_routines', 'routine'],
+            ['share-sottoroutines', 'share_sottoroutines', 'sottoroutine'],
+            ['share-inventory', 'share_inventory', 'inventario'],
+            ['share-extra-shopping', 'share_extra_shopping', 'spesa_extra'],
+            ['share-comments', 'share_comments', 'dashboard_comments'],
+            ['share-notes', 'share_notes', 'dashboard_notes'],
+            ['share-sheets', 'share_sheets', 'sheets']
+        ];
 
         document.addEventListener('DOMContentLoaded', () => {
             loadProfile();
@@ -377,7 +400,7 @@
                     renderProfilePreview();
                 });
             });
-            ['share-menu', 'share-routines', 'share-sottoroutines'].forEach(id => {
+            sharePreferenceMap.forEach(([id]) => {
                 document.getElementById(id).addEventListener('change', saveSocialProfile);
             });
             toggleCustomRelation();
@@ -412,9 +435,9 @@
             document.getElementById('profile-cover-color').value = profileSocial.cover_color || 'teal-blue';
             document.getElementById('profile-visibility').value = profileSocial.visibility || 'Privato';
             document.getElementById('profile-link').value = (profileSocial.links || [])[0] || '';
-            document.getElementById('share-menu').checked = !!profileSocial.share_menu;
-            document.getElementById('share-routines').checked = !!profileSocial.share_routines;
-            document.getElementById('share-sottoroutines').checked = !!profileSocial.share_sottoroutines;
+            sharePreferenceMap.forEach(([id, field]) => {
+                document.getElementById(id).checked = !!profileSocial[field];
+            });
             updateBioCounter();
             renderProfilePreview();
             renderConnections();
@@ -435,9 +458,9 @@
             profileSocial.cover_color = document.getElementById('profile-cover-color').value;
             profileSocial.visibility = document.getElementById('profile-visibility').value;
             profileSocial.links = [document.getElementById('profile-link').value.trim()].filter(Boolean);
-            profileSocial.share_menu = document.getElementById('share-menu').checked;
-            profileSocial.share_routines = document.getElementById('share-routines').checked;
-            profileSocial.share_sottoroutines = document.getElementById('share-sottoroutines').checked;
+            sharePreferenceMap.forEach(([id, field]) => {
+                profileSocial[field] = document.getElementById(id).checked;
+            });
             profileSocial.connections = profileSocial.connections || [];
             return profileSocial;
         }
@@ -609,12 +632,22 @@
             `).join('');
         }
 
-        async function buildShareData() {
+        function enabledShareGroups() {
+            collectSocialProfile();
+            return sharePreferenceMap
+                .filter(([, field]) => !!profileSocial[field])
+                .map(([, , key]) => key);
+        }
+
+        async function buildShareData(selectedIndexes = null) {
             if (typeof loadPortableData === 'function') await loadPortableData();
             const data = {};
-            if (profileSocial.share_menu) data.piani = exportPortableData.piani || [];
-            if (profileSocial.share_routines) data.routine = exportPortableData.routine || [];
-            if (profileSocial.share_sottoroutines) data.sottoroutine = exportPortableData.sottoroutine || [];
+            enabledShareGroups().forEach(key => {
+                const values = exportPortableData[key] || [];
+                data[key] = selectedIndexes
+                    ? values.filter((_, index) => selectedIndexes.has(`${key}:${index}`))
+                    : values;
+            });
             return data;
         }
 
@@ -625,13 +658,89 @@
                 status.textContent = 'Aggiungi il codice RoutineOS della connessione prima di condividere.';
                 return;
             }
-            if (!profileSocial.share_menu && !profileSocial.share_routines && !profileSocial.share_sottoroutines) {
-                status.textContent = 'Seleziona almeno una cosa da condividere: menu, routine o sottoroutine.';
+            const enabled = enabledShareGroups();
+            if (!enabled.length) {
+                status.textContent = 'Seleziona almeno una cosa da condividere nelle preferenze.';
                 return;
             }
-            status.textContent = 'Preparo e invio la condivisione...';
+            status.textContent = 'Scelgo i dati disponibili...';
             try {
-                const payload = await buildShareData();
+                await loadPortableData();
+                renderShareSelection(id);
+                status.textContent = 'Seleziona nel dettaglio cosa vuoi inviare.';
+            } catch (e) {
+                status.textContent = 'Errore di connessione durante la preparazione della condivisione.';
+            }
+        }
+
+        function renderShareSelection(id) {
+            const panel = document.getElementById('share-selection-panel');
+            const connection = (profileSocial.connections || []).find(item => item.id === id);
+            if (!panel || !connection) return;
+            pendingShareConnectionId = id;
+            const enabled = new Set(enabledShareGroups());
+            const cards = portableGroups
+                .filter(group => enabled.has(group.key))
+                .map(group => {
+                    const values = exportPortableData[group.key] || [];
+                    return `
+                        <section class="share-preview-card is-detailed">
+                            <div class="share-preview-card-head">
+                                <strong>${escapeHTML(group.title)}</strong>
+                                <span>${values.length} elementi</span>
+                            </div>
+                            <div class="share-preview-items">
+                                ${values.length ? values.map((entry, index) => `
+                                    <label class="share-preview-item">
+                                        <input type="checkbox" data-share-type="${group.key}" data-share-index="${index}" checked>
+                                        <span>
+                                            <strong>${escapeHTML(portableLabel(group.key, entry))}</strong>
+                                            <small>${escapeHTML(portableSummary(group.key, entry) || '')}</small>
+                                            <em>${escapeHTML(portableDetails(group.key, entry) || '')}</em>
+                                        </span>
+                                    </label>
+                                `).join('') : '<p class="portable-empty">Nessun dato disponibile.</p>'}
+                            </div>
+                        </section>
+                    `;
+                }).join('');
+            panel.innerHTML = `
+                <div>
+                    <strong>Condividi con ${escapeHTML(connection.name || connection.code)}</strong>
+                    <div class="connection-meta">Spunta solo gli elementi che vuoi inviare.</div>
+                </div>
+                <div class="share-preview-grid">${cards}</div>
+                <div class="connection-actions">
+                    <button class="btn primary" onclick="sendSelectedShare()">Invia selezionati</button>
+                    <button class="btn outline" onclick="cancelShareSelection()">Annulla</button>
+                </div>
+            `;
+            panel.classList.add('is-open');
+        }
+
+        function cancelShareSelection() {
+            pendingShareConnectionId = '';
+            const panel = document.getElementById('share-selection-panel');
+            if (panel) {
+                panel.classList.remove('is-open');
+                panel.innerHTML = '';
+            }
+        }
+
+        async function sendSelectedShare() {
+            const status = document.getElementById('connection-share-status');
+            const connection = (profileSocial.connections || []).find(item => item.id === pendingShareConnectionId);
+            if (!connection) return;
+            const selectedIndexes = new Set([...document.querySelectorAll('[data-share-type]')]
+                .filter(input => input.checked)
+                .map(input => `${input.dataset.shareType}:${input.dataset.shareIndex}`));
+            if (!selectedIndexes.size) {
+                status.textContent = 'Seleziona almeno un elemento da inviare.';
+                return;
+            }
+            status.textContent = 'Invio la condivisione...';
+            try {
+                const payload = await buildShareData(selectedIndexes);
                 const res = await apiFetch(`${API}/share/send`, {
                     method: 'POST',
                     body: JSON.stringify({
@@ -642,6 +751,7 @@
                 });
                 const result = await res.json();
                 status.textContent = result.message || result.detail || (res.ok ? 'Condivisione inviata.' : 'Errore durante la condivisione.');
+                if (res.ok) cancelShareSelection();
             } catch (e) {
                 status.textContent = 'Errore di connessione durante la condivisione.';
             }
@@ -696,25 +806,31 @@
             }
             selectedShareId = item.id;
             const normalized = typeof normalizePortableData === 'function' ? normalizePortableData(item.data || {}) : (item.data || {});
-            const groups = [
-                ['routine', 'Routine'],
-                ['sottoroutine', 'Sottoroutine'],
-                ['piani', 'Piani menu'],
-                ['inventario', 'Inventario'],
-                ['spesa_extra', 'Spesa extra']
+            const groups = typeof portableGroups !== 'undefined' ? portableGroups : [
+                { key: 'routine', title: 'Routine' },
+                { key: 'sottoroutine', title: 'Sottoroutine' },
+                { key: 'piani', title: 'Piani menu' }
             ];
-            const previewCards = groups.map(([key, title]) => {
+            const previewCards = groups.map(({ key, title }) => {
                 const values = normalized[key] || [];
-                const examples = values.slice(0, 3).map(entry => {
-                    if (typeof portableLabel === 'function') return portableLabel(key, entry);
-                    return entry.nome || entry.title || entry.filename || 'Elemento';
-                }).join(', ');
                 return `
-                    <label class="share-preview-card">
-                        <span><input type="checkbox" data-share-import-type="${key}" ${values.length ? 'checked' : ''} ${values.length ? '' : 'disabled'}> ${escapeHTML(title)}</span>
-                        <strong>${values.length} elementi</strong>
-                        <span>${escapeHTML(examples || 'Nessun elemento in questa categoria')}</span>
-                    </label>
+                    <section class="share-preview-card is-detailed">
+                        <label class="share-preview-card-head">
+                            <span><input type="checkbox" data-share-import-type="${key}" ${values.length ? 'checked' : ''} ${values.length ? '' : 'disabled'}> ${escapeHTML(title)}</span>
+                            <strong>${values.length} elementi</strong>
+                        </label>
+                        <div class="share-preview-items">
+                            ${values.length ? values.map(entry => `
+                                <article class="share-preview-item">
+                                    <span>
+                                        <strong>${escapeHTML(typeof portableLabel === 'function' ? portableLabel(key, entry) : (entry.nome || entry.title || entry.filename || 'Elemento'))}</strong>
+                                        <small>${escapeHTML(typeof portableSummary === 'function' ? portableSummary(key, entry) : '')}</small>
+                                        <em>${escapeHTML(typeof portableDetails === 'function' ? portableDetails(key, entry) : '')}</em>
+                                    </span>
+                                </article>
+                            `).join('') : '<p class="portable-empty">Nessun elemento in questa categoria.</p>'}
+                        </div>
+                    </section>
                 `;
             }).join('');
             panel.innerHTML = `
