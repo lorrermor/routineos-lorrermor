@@ -215,9 +215,9 @@ body.routineos-page .planner-ingredient-row.is-unlinked {
 
 @media (max-width: 900px) {
   body.routineos-page .side-menu::before {
-    padding-left: 112px !important;
+    padding-left: 126px !important;
     padding-right: 10px !important;
-    background-position: 70px center !important;
+    background-position: 84px center !important;
     background-size: 26px 26px !important;
   }
 }
