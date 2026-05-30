@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RoutineOS - Profilo</title>
     <link rel="icon" type="image/x-icon" href="favicon-v2.ico">
-    <link rel="stylesheet" href="styles.css?v=routineos-visual-5">
+    <link rel="stylesheet" href="styles.css?v=routineos-visual-6">
     <style>
         .profile-stack { display:grid; gap:18px; max-width:980px; }
         .profile-hero { padding:0; overflow:hidden; }
@@ -36,7 +36,9 @@
         .code-box { display:flex; gap:10px; align-items:center; flex-wrap:wrap; padding:14px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; }
         .code-value { font-family:monospace; font-size:1.15rem; color:var(--accent); letter-spacing:.04em; }
         .connection-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; align-items:center; padding:13px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; }
-        .connection-meta { color:var(--dim); font-size:.78rem; margin-top:3px; }
+        .connection-info { min-width:0; overflow:hidden; }
+        .connection-meta { color:var(--dim); font-size:.78rem; margin-top:3px; overflow-wrap:anywhere; }
+        .connection-actions { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
         .share-options { display:flex; gap:12px; flex-wrap:wrap; margin-top:12px; }
         .share-options label { display:flex; gap:8px; align-items:center; border:1px solid #e2e8f0; border-radius:999px; padding:8px 11px; background:#f8fafc; color:#334155; }
         .soft-panel { border:1px solid #e2e8f0; border-radius:8px; background:#fff; padding:14px; }
@@ -337,7 +339,7 @@
     <script src="config.js?v=routineos-config-1"></script>
 
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-    <script src="script.js?v=routineos-api-9"></script>
+    <script src="script.js?v=routineos-api-10"></script>
     <script>
         let profileSocial = {
             nickname: '',
@@ -584,12 +586,12 @@
             }
             list.innerHTML = connections.map(item => `
                 <div class="connection-row">
-                    <div>
+                    <div class="connection-info">
                         <strong>${escapeHTML(item.name || item.code)}</strong>
                         <div class="connection-meta">${escapeHTML(item.relation || 'Contatto')} - ${escapeHTML(item.code || 'nessun codice')} - ${escapeHTML(item.status || 'Salvato')}</div>
                         ${item.note ? `<div class="connection-meta">${escapeHTML(item.note)}</div>` : ''}
                     </div>
-                    <span style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
+                    <span class="connection-actions">
                         <button class="btn outline" onclick="shareWithConnection('${item.id}')">Condividi</button>
                         <button class="btn danger" onclick="removeConnection('${item.id}')">Rimuovi</button>
                     </span>
@@ -629,7 +631,7 @@
                     })
                 });
                 const result = await res.json();
-                status.textContent = result.message || (res.ok ? 'Condivisione inviata.' : 'Errore durante la condivisione.');
+                status.textContent = result.message || result.detail || (res.ok ? 'Condivisione inviata.' : 'Errore durante la condivisione.');
             } catch (e) {
                 status.textContent = 'Errore di connessione durante la condivisione.';
             }
@@ -694,6 +696,7 @@
     </script>
 </body>
 </html>
+
 
 
 

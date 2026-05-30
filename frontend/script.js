@@ -1686,7 +1686,10 @@ function portablePackage(data) {
 }
 
 function downloadTextFile(filename, content, mime = "text/plain;charset=utf-8") {
-    const blob = new Blob([content], { type: mime });
+    downloadBlob(filename, new Blob([content], { type: mime }));
+}
+
+function downloadBlob(filename, blob) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -1712,7 +1715,10 @@ function exportSelectedData(format) {
     } else if (format === "csv") {
         downloadTextFile(`routineos_export_${date}.csv`, portableDataToCsv(data), "text/csv;charset=utf-8");
     } else if (format === "excel") {
-        downloadTextFile(`routineos_export_${date}.xls`, portableDataToExcelXml(data), "application/vnd.ms-excel;charset=utf-8");
+        downloadBlob(
+            `routineos_export_${date}.xlsx`,
+            portableDataToXlsxBlob(data)
+        );
     } else if (format === "pdf") {
         downloadPortablePdf(pack);
     }
@@ -1813,48 +1819,159 @@ function portableDataToCsv(data) {
     ].join(","))].join("\n");
 }
 
-function excelXmlEscape(value) {
+function xmlEscape(value) {
     return String(value ?? "")
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;");
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&apos;");
 }
 
-function excelCell(value, style = "") {
-    const styleAttr = style ? ` ss:StyleID="${style}"` : "";
-    return `<Cell${styleAttr}><Data ss:Type="String">${excelXmlEscape(value)}</Data></Cell>`;
+function xlsxCell(value) {
+    return `<c t="inlineStr"><is><t>${xmlEscape(value)}</t></is></c>`;
 }
 
-function portableDataToExcelXml(data) {
+function portableDataToWorksheetXml(data) {
     const rows = portableRows(data);
-    const body = rows.map(row => `<Row>
-        ${excelCell(row.categoria)}
-        ${excelCell(row.nome)}
-        ${excelCell(row.riepilogo)}
-        ${excelCell(row.dettagli)}
-        ${excelCell(row.dati)}
-    </Row>`).join("");
-    return `<?xml version="1.0" encoding="UTF-8"?>
-<?mso-application progid="Excel.Sheet"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:o="urn:schemas-microsoft-com:office:office"
- xmlns:x="urn:schemas-microsoft-com:office:excel"
- xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:html="http://www.w3.org/TR/REC-html40">
- <Styles>
-  <Style ss:ID="header"><Font ss:Bold="1" ss:Color="#0F172A"/><Interior ss:Color="#DBEAFE" ss:Pattern="Solid"/></Style>
-  <Style ss:ID="title"><Font ss:Bold="1" ss:Size="16" ss:Color="#1D4ED8"/></Style>
- </Styles>
- <Worksheet ss:Name="RoutineOS">
-  <Table>
-   <Column ss:Width="100"/><Column ss:Width="180"/><Column ss:Width="220"/><Column ss:Width="420"/><Column ss:Width="520"/>
-   <Row>${excelCell("Esportazione RoutineOS", "title")}${excelCell(new Date().toLocaleString("it-IT"))}</Row>
-   <Row></Row>
-   <Row>${excelCell("Categoria", "header")}${excelCell("Nome", "header")}${excelCell("Riepilogo", "header")}${excelCell("Dettagli", "header")}${excelCell("Dati importazione", "header")}</Row>
-   ${body || `<Row>${excelCell("Nessun elemento")}</Row>`}
-  </Table>
- </Worksheet>
-</Workbook>`;
+    const header = ["Categoria", "Nome", "Riepilogo", "Dettagli", "Dati importazione"];
+    const sheetRows = [
+        header,
+        ...rows.map(row => [row.categoria, row.nome, row.riepilogo, row.dettagli, row.dati])
+    ];
+    const body = sheetRows.map((row, index) =>
+        `<row r="${index + 1}">${row.map(xlsxCell).join("")}</row>`
+    ).join("");
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <cols><col min="1" max="1" width="18" customWidth="1"/><col min="2" max="2" width="30" customWidth="1"/><col min="3" max="5" width="52" customWidth="1"/></cols>
+  <sheetData>${body}</sheetData>
+</worksheet>`;
+}
+
+function crc32(bytes) {
+    if (!crc32.table) {
+        crc32.table = Array.from({ length: 256 }, (_, n) => {
+            let c = n;
+            for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
+            return c >>> 0;
+        });
+    }
+    let crc = -1;
+    bytes.forEach(byte => {
+        crc = (crc >>> 8) ^ crc32.table[(crc ^ byte) & 0xff];
+    });
+    return (crc ^ -1) >>> 0;
+}
+
+function writeUint32(view, offset, value) {
+    view.setUint32(offset, value >>> 0, true);
+}
+
+function writeUint16(view, offset, value) {
+    view.setUint16(offset, value, true);
+}
+
+function makeZip(files) {
+    const encoder = new TextEncoder();
+    const chunks = [];
+    const central = [];
+    let offset = 0;
+    files.forEach(file => {
+        const nameBytes = encoder.encode(file.name);
+        const dataBytes = encoder.encode(file.content);
+        const crc = crc32(dataBytes);
+        const local = new Uint8Array(30 + nameBytes.length);
+        const localView = new DataView(local.buffer);
+        writeUint32(localView, 0, 0x04034b50);
+        writeUint16(localView, 4, 20);
+        writeUint16(localView, 6, 0);
+        writeUint16(localView, 8, 0);
+        writeUint16(localView, 10, 0);
+        writeUint16(localView, 12, 0);
+        writeUint32(localView, 14, crc);
+        writeUint32(localView, 18, dataBytes.length);
+        writeUint32(localView, 22, dataBytes.length);
+        writeUint16(localView, 26, nameBytes.length);
+        writeUint16(localView, 28, 0);
+        local.set(nameBytes, 30);
+        chunks.push(local, dataBytes);
+
+        const centralFile = new Uint8Array(46 + nameBytes.length);
+        const centralView = new DataView(centralFile.buffer);
+        writeUint32(centralView, 0, 0x02014b50);
+        writeUint16(centralView, 4, 20);
+        writeUint16(centralView, 6, 20);
+        writeUint16(centralView, 8, 0);
+        writeUint16(centralView, 10, 0);
+        writeUint16(centralView, 12, 0);
+        writeUint16(centralView, 14, 0);
+        writeUint32(centralView, 16, crc);
+        writeUint32(centralView, 20, dataBytes.length);
+        writeUint32(centralView, 24, dataBytes.length);
+        writeUint16(centralView, 28, nameBytes.length);
+        writeUint16(centralView, 30, 0);
+        writeUint16(centralView, 32, 0);
+        writeUint16(centralView, 34, 0);
+        writeUint16(centralView, 36, 0);
+        writeUint32(centralView, 38, 0);
+        writeUint32(centralView, 42, offset);
+        centralFile.set(nameBytes, 46);
+        central.push(centralFile);
+        offset += local.length + dataBytes.length;
+    });
+    const centralSize = central.reduce((sum, item) => sum + item.length, 0);
+    const end = new Uint8Array(22);
+    const endView = new DataView(end.buffer);
+    writeUint32(endView, 0, 0x06054b50);
+    writeUint16(endView, 8, files.length);
+    writeUint16(endView, 10, files.length);
+    writeUint32(endView, 12, centralSize);
+    writeUint32(endView, 16, offset);
+    writeUint16(endView, 20, 0);
+    return new Blob([...chunks, ...central, end], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    });
+}
+
+function portableDataToXlsxBlob(data) {
+    return makeZip([
+        {
+            name: "[Content_Types].xml",
+            content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+</Types>`
+        },
+        {
+            name: "_rels/.rels",
+            content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`
+        },
+        {
+            name: "xl/workbook.xml",
+            content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets><sheet name="RoutineOS" sheetId="1" r:id="rId1"/></sheets>
+</workbook>`
+        },
+        {
+            name: "xl/_rels/workbook.xml.rels",
+            content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+</Relationships>`
+        },
+        {
+            name: "xl/worksheets/sheet1.xml",
+            content: portableDataToWorksheetXml(data)
+        }
+    ]);
 }
 
 function portableTypeTitle(type) {
@@ -3226,7 +3343,7 @@ function renderGiorni() {
                 const isInv = !!mappaUnitaInventario[nomeNorm];
                 const iRow = document.createElement('div');
                 iRow.className = `planner-ingredient-row drag-drop-target ${isInv ? 'is-linked' : 'is-unlinked'}`;
-                iRow.style = "display:grid; grid-template-columns: 28px minmax(140px,2fr) minmax(70px,1fr) 52px 82px 24px; gap:7px; margin-top:7px; align-items:center;";
+                iRow.style = "display:grid; grid-template-columns: 28px minmax(140px,2fr) minmax(70px,1fr) 52px 82px 48px 24px; gap:7px; margin-top:7px; align-items:center;";
                 iRow.setAttribute('ondragover', 'event.preventDefault()');
                 iRow.setAttribute('ondrop', `dropIngredient(event, ${pIdx}, ${ptIdx}, ${iIdx})`);
                 iRow.innerHTML = `

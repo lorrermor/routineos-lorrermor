@@ -270,8 +270,14 @@ def share_config_key(user_code: str) -> str:
     return f"share_inbox:{code}"
 
 
-def read_share_inbox_by_code(user_code: str) -> list:
-    key = share_config_key(user_code)
+def share_email_config_key(email: str) -> str:
+    cleaned = (email or "").strip().lower()
+    if "@" not in cleaned:
+        raise HTTPException(status_code=400, detail="Email connessione non valida.")
+    return f"share_inbox_email:{cleaned}"
+
+
+def read_share_inbox_by_key(key: str) -> list:
     rows = supabase.table("config").select("valore").eq("chiave", key).execute().data or []
     if not rows:
         return []
@@ -282,14 +288,29 @@ def read_share_inbox_by_code(user_code: str) -> list:
         return []
 
 
-def save_share_inbox_by_code(user_code: str, items: list, owner_user_id: str):
-    key = share_config_key(user_code)
+def read_share_inbox_by_code(user_code: str) -> list:
+    return read_share_inbox_by_key(share_config_key(user_code))
+
+
+def read_share_inbox_by_email(email: str) -> list:
+    return read_share_inbox_by_key(share_email_config_key(email))
+
+
+def save_share_inbox_by_key(key: str, items: list, owner_user_id: str):
     supabase.table("config").delete().eq("chiave", key).execute()
     supabase.table("config").insert({
         "chiave": key,
         "valore": json.dumps(items[-50:]),
         "user_id": owner_user_id
     }).execute()
+
+
+def save_share_inbox_by_code(user_code: str, items: list, owner_user_id: str):
+    save_share_inbox_by_key(share_config_key(user_code), items, owner_user_id)
+
+
+def save_share_inbox_by_email(email: str, items: list, owner_user_id: str):
+    save_share_inbox_by_key(share_email_config_key(email), items, owner_user_id)
 
 
 def admin_list_users(max_pages: int = 10) -> list:
@@ -321,10 +342,10 @@ def admin_list_users(max_pages: int = 10) -> list:
     return users
 
 
-def resolve_share_target(raw_target: str) -> tuple[str, Optional[str]]:
+def resolve_share_target(raw_target: str) -> tuple[str, Optional[str], Optional[str]]:
     target = (raw_target or "").strip()
     if not target:
-        return "", None
+        return "", None, None
     normalized = normalize_user_code(target) if "@" not in target else ""
     lowered = target.lower()
     for user in admin_list_users():
@@ -335,8 +356,10 @@ def resolve_share_target(raw_target: str) -> tuple[str, Optional[str]]:
         nickname = str(profile.get("nickname") or metadata.get("nickname") or "").lower()
         code = f"RO-{user_id[:8].upper()}" if user_id else ""
         if lowered == email or lowered == nickname or (normalized and normalized == code):
-            return code, user_id
-    return normalized, None
+            return code, user_id, email or None
+    if "@" in target:
+        return "", None, lowered
+    return normalized, None, None
 
 
 def update_supabase_user(token: str, payload: dict):
@@ -585,15 +608,26 @@ async def update_profile_password(data: dict, authorization: str = Header(None),
 
 
 @app.get("/share/inbox")
-async def get_share_inbox(user_id: str = Depends(get_user_id)):
+async def get_share_inbox(authorization: str = Header(None), user_id: str = Depends(get_user_id)):
     user_code = f"RO-{user_id[:8].upper()}"
-    return {"status": "success", "items": read_share_inbox_by_code(user_code)}
+    items = read_share_inbox_by_code(user_code)
+    try:
+        token = get_auth_token(authorization)
+        user_response = auth_supabase.auth.get_user(token)
+        email = user_response.user.email if user_response.user else ""
+        if email:
+            by_email = read_share_inbox_by_email(email)
+            seen = {item.get("id") for item in items if isinstance(item, dict)}
+            items.extend(item for item in by_email if isinstance(item, dict) and item.get("id") not in seen)
+    except Exception:
+        pass
+    return {"status": "success", "items": items}
 
 
 @app.post("/share/send")
 async def send_share(data: dict, user_id: str = Depends(get_user_id)):
-    target_code, target_user_id = resolve_share_target(data.get("target_code") or "")
-    if not target_code:
+    target_code, target_user_id, target_email = resolve_share_target(data.get("target_code") or "")
+    if not target_code and not target_email:
         raise HTTPException(status_code=400, detail="Inserisci codice RoutineOS, email o nickname della connessione.")
 
     payload = data.get("data") or {}
@@ -608,17 +642,31 @@ async def send_share(data: dict, user_id: str = Depends(get_user_id)):
         "data": payload,
         "created_at": datetime.now().isoformat(timespec="seconds")
     }
-    inbox = read_share_inbox_by_code(target_code)
-    inbox.append(item)
-    save_share_inbox_by_code(target_code, inbox, target_user_id or user_id)
+    if target_code:
+        inbox = read_share_inbox_by_code(target_code)
+        inbox.append(item)
+        save_share_inbox_by_code(target_code, inbox, target_user_id or user_id)
+    else:
+        inbox = read_share_inbox_by_email(target_email)
+        inbox.append(item)
+        save_share_inbox_by_email(target_email, inbox, target_user_id or user_id)
     return {"status": "success", "message": "Condivisione inviata.", "share": item}
 
 
 @app.delete("/share/inbox/{share_id}")
-async def delete_share_inbox_item(share_id: str, user_id: str = Depends(get_user_id)):
+async def delete_share_inbox_item(share_id: str, authorization: str = Header(None), user_id: str = Depends(get_user_id)):
     user_code = f"RO-{user_id[:8].upper()}"
     inbox = [item for item in read_share_inbox_by_code(user_code) if item.get("id") != share_id]
     save_share_inbox_by_code(user_code, inbox, user_id)
+    try:
+        token = get_auth_token(authorization)
+        user_response = auth_supabase.auth.get_user(token)
+        email = user_response.user.email if user_response.user else ""
+        if email:
+            email_inbox = [item for item in read_share_inbox_by_email(email) if item.get("id") != share_id]
+            save_share_inbox_by_email(email, email_inbox, user_id)
+    except Exception:
+        pass
     return {"status": "success"}
 
 
