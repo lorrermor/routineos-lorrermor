@@ -206,11 +206,50 @@ ALLOWED_USER_CONFIG_KEYS = {
     "pending_tasks",
 }
 
+USER_CONFIG_TABLES = {
+    "dashboard_comments": "dashboard_comments",
+    "dashboard_notes": "dashboard_notes",
+    "sheets": "fogli",
+    "extra_shopping": "spesa_extra",
+    "extra_shopping_columns": "spesa_extra_colonne",
+    "stats": "statistiche_app",
+    "justifications": "giustificazioni",
+    "pending_tasks": "attivita_pendenti",
+}
+
 
 def user_config_key(user_id: str, key: str) -> str:
     if key not in ALLOWED_USER_CONFIG_KEYS:
         raise HTTPException(status_code=400, detail="Chiave configurazione non valida.")
     return f"user:{user_id}:{key}"
+
+
+def user_config_table(key: str) -> str:
+    if key not in USER_CONFIG_TABLES:
+        raise HTTPException(status_code=400, detail="Chiave configurazione non valida.")
+    return USER_CONFIG_TABLES[key]
+
+
+def read_dedicated_user_config(user_id: str, key: str):
+    table = user_config_table(key)
+    rows = supabase.table(table).select("valore").eq("user_id", user_id).execute().data or []
+    if not rows:
+        return None
+    return rows[0].get("valore")
+
+
+def save_dedicated_user_config(user_id: str, key: str, value):
+    table = user_config_table(key)
+    supabase.table(table).upsert({
+        "user_id": user_id,
+        "valore": value,
+        "updated_at": datetime.now().isoformat()
+    }).execute()
+
+
+def delete_dedicated_user_config(user_id: str, key: str):
+    table = user_config_table(key)
+    supabase.table(table).delete().eq("user_id", user_id).execute()
 
 
 def load_profile_data(user_id: str, token: str) -> dict:
@@ -311,6 +350,59 @@ def save_share_inbox_by_code(user_code: str, items: list, owner_user_id: str):
 
 def save_share_inbox_by_email(email: str, items: list, owner_user_id: str):
     save_share_inbox_by_key(share_email_config_key(email), items, owner_user_id)
+
+
+def normalize_share_record(row: dict) -> dict:
+    return {
+        "id": row.get("id"),
+        "from_user_id": row.get("sender_user_id"),
+        "from_code": row.get("sender_code"),
+        "title": row.get("title") or "Condivisione RoutineOS",
+        "data": row.get("payload") or {},
+        "created_at": str(row.get("created_at") or "")
+    }
+
+
+def read_received_shares(user_id: str, user_code: str, email: str = "") -> list:
+    seen = set()
+    rows = []
+    filters = [("recipient_user_id", user_id), ("recipient_code", user_code)]
+    if email:
+        filters.append(("recipient_email", email.lower()))
+    for column, value in filters:
+        try:
+            batch = (
+                supabase.table("condivisioni_ricevute")
+                .select("*")
+                .eq(column, value)
+                .eq("archived", False)
+                .execute()
+                .data or []
+            )
+        except Exception:
+            batch = []
+        for row in batch:
+            share_id = row.get("id")
+            if share_id and share_id not in seen:
+                seen.add(share_id)
+                rows.append(normalize_share_record(row))
+    rows.sort(key=lambda item: item.get("created_at") or "")
+    return rows
+
+
+def save_received_share(target_code: str, target_user_id: Optional[str], target_email: Optional[str], item: dict):
+    supabase.table("condivisioni_ricevute").insert({
+        "id": item["id"],
+        "recipient_user_id": target_user_id,
+        "recipient_email": (target_email or "").lower() or None,
+        "recipient_code": target_code or None,
+        "sender_user_id": item.get("from_user_id"),
+        "sender_code": item.get("from_code"),
+        "title": item.get("title"),
+        "payload": item.get("data") or {},
+        "archived": False,
+        "created_at": item.get("created_at") or datetime.now().isoformat(timespec="seconds")
+    }).execute()
 
 
 def admin_list_users(max_pages: int = 10) -> list:
@@ -610,17 +702,20 @@ async def update_profile_password(data: dict, authorization: str = Header(None),
 @app.get("/share/inbox")
 async def get_share_inbox(authorization: str = Header(None), user_id: str = Depends(get_user_id)):
     user_code = f"RO-{user_id[:8].upper()}"
-    items = read_share_inbox_by_code(user_code)
+    email = ""
     try:
         token = get_auth_token(authorization)
         user_response = auth_supabase.auth.get_user(token)
         email = user_response.user.email if user_response.user else ""
+    except Exception:
+        pass
+    items = read_received_shares(user_id, user_code, email)
+    if not items:
+        items = read_share_inbox_by_code(user_code)
         if email:
             by_email = read_share_inbox_by_email(email)
             seen = {item.get("id") for item in items if isinstance(item, dict)}
             items.extend(item for item in by_email if isinstance(item, dict) and item.get("id") not in seen)
-    except Exception:
-        pass
     return {"status": "success", "items": items}
 
 
@@ -642,19 +737,13 @@ async def send_share(data: dict, user_id: str = Depends(get_user_id)):
         "data": payload,
         "created_at": datetime.now().isoformat(timespec="seconds")
     }
-    if target_code:
-        inbox = read_share_inbox_by_code(target_code)
-        inbox.append(item)
-        save_share_inbox_by_code(target_code, inbox, target_user_id or user_id)
-    else:
-        inbox = read_share_inbox_by_email(target_email)
-        inbox.append(item)
-        save_share_inbox_by_email(target_email, inbox, target_user_id or user_id)
+    save_received_share(target_code, target_user_id, target_email, item)
     return {"status": "success", "message": "Condivisione inviata.", "share": item}
 
 
 @app.delete("/share/inbox/{share_id}")
 async def delete_share_inbox_item(share_id: str, authorization: str = Header(None), user_id: str = Depends(get_user_id)):
+    supabase.table("condivisioni_ricevute").update({"archived": True}).eq("id", share_id).eq("recipient_user_id", user_id).execute()
     user_code = f"RO-{user_id[:8].upper()}"
     inbox = [item for item in read_share_inbox_by_code(user_code) if item.get("id") != share_id]
     save_share_inbox_by_code(user_code, inbox, user_id)
@@ -673,6 +762,10 @@ async def delete_share_inbox_item(share_id: str, authorization: str = Header(Non
 @app.get("/config/item/{key}")
 async def get_user_config_item(key: str, authorization: str = Header(None), user_id: str = Depends(get_user_id)):
     token = get_auth_token(authorization)
+    dedicated_value = read_dedicated_user_config(user_id, key)
+    if dedicated_value is not None:
+        return {"status": "success", "key": key, "value": dedicated_value}
+
     storage_key = user_config_key(user_id, key)
     rows = rest_select_user_rows(
         "config",
@@ -688,6 +781,7 @@ async def get_user_config_item(key: str, authorization: str = Header(None), user
         value = json.loads(raw or "null")
     except Exception:
         value = raw
+    save_dedicated_user_config(user_id, key, value)
     return {"status": "success", "key": key, "value": value}
 
 
@@ -696,6 +790,7 @@ async def save_user_config_item(key: str, data: dict, authorization: str = Heade
     token = get_auth_token(authorization)
     storage_key = user_config_key(user_id, key)
     value = data.get("value")
+    save_dedicated_user_config(user_id, key, value)
     rest_delete_rows("config", {"chiave": storage_key, "user_id": user_id}, token)
     rest_insert_user_row("config", {
         "chiave": storage_key,
@@ -709,6 +804,7 @@ async def save_user_config_item(key: str, data: dict, authorization: str = Heade
 async def delete_user_config_item(key: str, authorization: str = Header(None), user_id: str = Depends(get_user_id)):
     token = get_auth_token(authorization)
     storage_key = user_config_key(user_id, key)
+    delete_dedicated_user_config(user_id, key)
     rest_delete_rows("config", {"chiave": storage_key, "user_id": user_id}, token)
     return {"status": "success", "key": key}
 
@@ -724,6 +820,14 @@ async def delete_account(user_id: str = Depends(get_user_id)):
         "routine_piani",
         "sottoroutine_piani",
         "config",
+        "dashboard_comments",
+        "dashboard_notes",
+        "fogli",
+        "spesa_extra",
+        "spesa_extra_colonne",
+        "statistiche_app",
+        "giustificazioni",
+        "attivita_pendenti",
     ]
 
     errors = []
@@ -732,6 +836,10 @@ async def delete_account(user_id: str = Depends(get_user_id)):
             supabase.table(table).delete().eq("user_id", user_id).execute()
         except Exception as e:
             errors.append(f"{table}: {str(e)}")
+    try:
+        supabase.table("condivisioni_ricevute").delete().eq("recipient_user_id", user_id).execute()
+    except Exception as e:
+        errors.append(f"condivisioni_ricevute: {str(e)}")
 
     auth_deleted = False
     if SERVICE_ROLE_KEY:
