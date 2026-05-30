@@ -18,10 +18,11 @@ body.routineos-page .side-menu {
 }
 
 body.routineos-page .side-menu::before {
-  content: "RoutineOS";
-  color: #0f172a;
-  font-size: 1.18rem;
-  font-weight: 850;
+  content: "";
+  background-image: url("logo-routineos-no-tagline-dark.png") !important;
+  background-position: left center !important;
+  background-repeat: no-repeat !important;
+  background-size: 168px auto !important;
 }
 
 body.routineos-page .side-menu a,
@@ -162,7 +163,7 @@ body.routineos-page .editor-row {
 body.routineos-page .drag-handle {
   background: #f1f5f9 !important;
   border-color: #cbd5e1 !important;
-  color: #64748b !important;
+  color: transparent !important;
   border-radius: 10px !important;
 }
 

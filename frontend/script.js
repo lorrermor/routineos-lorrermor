@@ -825,9 +825,28 @@ function buildSubroutineLinks(sottoroutineDovute, oggi = new Date()) {
         const detail = formatSubroutineDetail(sub, oggi);
         if (!detail) return;
         if (!map.has(key)) map.set(key, []);
-        map.get(key).push({ nome: sub.nome, detail });
+        map.get(key).push({ ...sub, nome: sub.nome, detail });
     });
     return map;
+}
+
+function findLinkedSubroutinesForDashboard(item, title, sottoroutineDovute, usedSubroutineKeys, oggi = new Date()) {
+    const parentKey = normalizeName(item.nome);
+    const titleKey = normalizeName(title);
+    const candidates = sottoroutineDovute.filter(sub => {
+        const subNameKey = normalizeName(sub.nome);
+        const subParentKey = normalizeName(sub.routine_parent);
+        if (!subNameKey || usedSubroutineKeys.has(subNameKey)) return false;
+        return (
+            (subParentKey === parentKey && subNameKey === titleKey) ||
+            subNameKey === titleKey ||
+            subParentKey === titleKey
+        );
+    });
+
+    return candidates
+        .map(sub => ({ ...sub, detail: formatSubroutineDetail(sub, oggi) }))
+        .filter(sub => sub.detail);
 }
 
 function openSubroutineFromDashboard(nomeEncoded) {
@@ -2815,7 +2834,6 @@ async function caricaRoutineDiOggi() {
 
         const routineDovute = routine.map(item => ({ ...item, tipo: "routine" })).filter(item => isRoutineDue(item));
         const sottoroutineDovute = sottoroutine.map(item => ({ ...item, tipo: "sottoroutine" })).filter(item => isRoutineDue(item));
-        const subLinks = buildSubroutineLinks(sottoroutineDovute);
         const linkedSubNames = new Set();
         const pending = loadPendingTasks();
         const oggi = localISODate();
@@ -2828,7 +2846,7 @@ async function caricaRoutineDiOggi() {
                 const key = `${tipo}:${item.nome}:${itemId}`;
                 const isDaily = (item.frequenza || "giornaliera").toLowerCase() === "giornaliera";
                 const title = routineElementTitle(elemento, item);
-                const linkedSubs = subLinks.get(`${normalizeName(item.nome)}::${normalizeName(title)}`) || [];
+                const linkedSubs = findLinkedSubroutinesForDashboard(item, title, sottoroutineDovute, linkedSubNames);
                 linkedSubs.forEach(sub => linkedSubNames.add(normalizeName(sub.nome)));
                 const linkedDetail = linkedSubs.map(sub => sub.detail).filter(Boolean).join(", ");
                 const linkedSubName = linkedSubs[0]?.nome || "";
