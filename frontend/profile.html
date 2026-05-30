@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RoutineOS - Profilo</title>
     <link rel="icon" type="image/x-icon" href="favicon-v2.ico">
-    <link rel="stylesheet" href="styles.css?v=routineos-visual-7">
+    <link rel="stylesheet" href="styles.css?v=routineos-visual-8">
     <style>
         .profile-stack { display:grid; gap:18px; max-width:980px; }
         .profile-hero { padding:0; overflow:hidden; }
@@ -39,6 +39,12 @@
         .connection-info { min-width:0; overflow:hidden; }
         .connection-meta { color:var(--dim); font-size:.78rem; margin-top:3px; overflow-wrap:anywhere; }
         .connection-actions { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+        .share-preview-panel { display:none; margin-top:14px; border:1px solid #bfdbfe; background:#eff6ff; border-radius:8px; padding:14px; }
+        .share-preview-panel.is-open { display:grid; gap:12px; }
+        .share-preview-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+        .share-preview-card { border:1px solid #dbeafe; border-radius:8px; background:#fff; padding:10px; display:grid; gap:6px; }
+        .share-preview-card strong { color:#0f172a; }
+        .share-preview-card span { color:var(--dim); font-size:.78rem; }
         .share-options { display:flex; gap:12px; flex-wrap:wrap; margin-top:12px; }
         .share-options label { display:flex; gap:8px; align-items:center; border:1px solid #e2e8f0; border-radius:999px; padding:8px 11px; background:#f8fafc; color:#334155; }
         .soft-panel { border:1px solid #e2e8f0; border-radius:8px; background:#fff; padding:14px; }
@@ -58,6 +64,7 @@
         .import-preview { display:grid; gap:8px; }
         @media (max-width:760px) {
             .profile-main, .form-grid-2, .portable-layout, .portable-groups { grid-template-columns:1fr; }
+            .share-preview-grid { grid-template-columns:1fr; }
             .form-grid-2 .full { grid-column:auto; }
             .avatar-wrap { margin-top:-48px; }
         }
@@ -251,6 +258,7 @@
                         <button class="btn outline" onclick="loadShareInbox()">Aggiorna</button>
                     </div>
                     <div id="share-inbox-list" class="task-list"></div>
+                    <div id="share-preview-panel" class="share-preview-panel"></div>
                 </section>
 
                 <section class="card">
@@ -339,7 +347,7 @@
     <script src="config.js?v=routineos-config-1"></script>
 
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-    <script src="script.js?v=routineos-api-11"></script>
+    <script src="script.js?v=routineos-api-12"></script>
     <script>
         let profileSocial = {
             nickname: '',
@@ -356,6 +364,8 @@
             share_sottoroutines: false
         };
         let userCode = 'RO---------';
+        let receivedShares = [];
+        let selectedShareId = '';
 
         document.addEventListener('DOMContentLoaded', () => {
             loadProfile();
@@ -645,8 +655,10 @@
                 const res = await apiFetch(`${API}/share/inbox`);
                 const data = await res.json();
                 const items = data.items || [];
+                receivedShares = items;
                 if (!items.length) {
                     list.innerHTML = '<p class="empty-state">Nessuna condivisione ricevuta.</p>';
+                    renderSharePreview(null);
                     return;
                 }
                 list.innerHTML = items.slice().reverse().map(item => {
@@ -660,7 +672,11 @@
                                 <div class="connection-meta">Da ${escapeHTML(item.from_code || '-')} - ${escapeHTML(item.created_at || '')}</div>
                                 <div class="connection-meta">${escapeHTML(counts || 'Dati condivisi')}</div>
                             </div>
-                            <button class="btn danger" onclick="removeShareInboxItem('${item.id}')">Archivia</button>
+                            <span class="connection-actions">
+                                <button class="btn outline" onclick="previewShareItem('${item.id}')">Visualizza</button>
+                                <button class="btn primary" onclick="insertShareItem('${item.id}')">Inserisci</button>
+                                <button class="btn danger" onclick="removeShareInboxItem('${item.id}')">Elimina</button>
+                            </span>
                         </div>
                     `;
                 }).join('');
@@ -669,8 +685,82 @@
             }
         }
 
+        function renderSharePreview(item) {
+            const panel = document.getElementById('share-preview-panel');
+            if (!panel) return;
+            if (!item) {
+                panel.classList.remove('is-open');
+                panel.innerHTML = '';
+                selectedShareId = '';
+                return;
+            }
+            selectedShareId = item.id;
+            const normalized = typeof normalizePortableData === 'function' ? normalizePortableData(item.data || {}) : (item.data || {});
+            const groups = [
+                ['routine', 'Routine'],
+                ['sottoroutine', 'Sottoroutine'],
+                ['piani', 'Piani menu'],
+                ['inventario', 'Inventario'],
+                ['spesa_extra', 'Spesa extra']
+            ];
+            const previewCards = groups.map(([key, title]) => {
+                const values = normalized[key] || [];
+                const examples = values.slice(0, 3).map(entry => {
+                    if (typeof portableLabel === 'function') return portableLabel(key, entry);
+                    return entry.nome || entry.title || entry.filename || 'Elemento';
+                }).join(', ');
+                return `
+                    <label class="share-preview-card">
+                        <span><input type="checkbox" data-share-import-type="${key}" ${values.length ? 'checked' : ''} ${values.length ? '' : 'disabled'}> ${escapeHTML(title)}</span>
+                        <strong>${values.length} elementi</strong>
+                        <span>${escapeHTML(examples || 'Nessun elemento in questa categoria')}</span>
+                    </label>
+                `;
+            }).join('');
+            panel.innerHTML = `
+                <div>
+                    <strong>${escapeHTML(item.title || 'Condivisione RoutineOS')}</strong>
+                    <div class="connection-meta">Controlla cosa vuoi inserire prima di importarlo nel tuo account.</div>
+                </div>
+                <div class="share-preview-grid">${previewCards}</div>
+                <div class="connection-actions">
+                    <button class="btn primary" onclick="insertShareItem('${item.id}')">Inserisci selezionati</button>
+                    <button class="btn outline" onclick="renderSharePreview(null)">Chiudi anteprima</button>
+                </div>
+                <div id="share-import-status" class="connection-meta"></div>
+            `;
+            panel.classList.add('is-open');
+        }
+
+        function previewShareItem(id) {
+            const item = receivedShares.find(entry => entry.id === id);
+            renderSharePreview(item || null);
+        }
+
+        async function insertShareItem(id) {
+            const item = receivedShares.find(entry => entry.id === id);
+            const status = document.getElementById('share-import-status') || document.getElementById('connection-share-status');
+            if (!item) {
+                if (status) status.textContent = 'Condivisione non trovata. Premi Aggiorna e riprova.';
+                return;
+            }
+            const checks = [...document.querySelectorAll('[data-share-import-type]')];
+            const selected = checks.length && selectedShareId === id
+                ? new Set(checks.filter(input => input.checked).map(input => input.dataset.shareImportType))
+                : new Set(Object.entries(item.data || {}).filter(([, value]) => Array.isArray(value) && value.length).map(([key]) => key));
+            if (!selected.size) {
+                if (status) status.textContent = 'Seleziona almeno una categoria da inserire.';
+                return;
+            }
+            const ok = await importPortableDataSet(item.data || {}, selected, status, 'Inserire i dati selezionati nel tuo account? Gli elementi con lo stesso nome verranno aggiornati.');
+            if (ok && status) status.textContent = 'Condivisione inserita nel tuo account.';
+        }
+
         async function removeShareInboxItem(id) {
+            const ok = confirm('Eliminare questa condivisione ricevuta? I dati gia inseriti nel tuo account non verranno toccati.');
+            if (!ok) return;
             await apiFetch(`${API}/share/inbox/${encodeURIComponent(id)}`, { method: 'DELETE' });
+            if (selectedShareId === id) renderSharePreview(null);
             loadShareInbox();
         }
 
@@ -696,6 +786,7 @@
     </script>
 </body>
 </html>
+
 
 
 

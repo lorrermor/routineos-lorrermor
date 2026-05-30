@@ -2171,13 +2171,22 @@ async function importSelectedData() {
         if (status) status.textContent = "Seleziona almeno una categoria da importare.";
         return;
     }
-    if (!confirm("Importare i dati selezionati? Gli elementi con lo stesso nome verranno aggiornati.")) return;
+    await importPortableDataSet(importPortableData, selected, status, "Importare i dati selezionati? Gli elementi con lo stesso nome verranno aggiornati.");
+}
 
+async function importPortableDataSet(portableData, selectedTypes, status = null, confirmMessage = null) {
+    const dataToImport = normalizePortableData(portableData || {});
+    const selected = selectedTypes instanceof Set ? selectedTypes : new Set(selectedTypes || Object.keys(dataToImport));
+    if (!selected.size) {
+        if (status) status.textContent = "Seleziona almeno una categoria da importare.";
+        return false;
+    }
+    if (confirmMessage && !confirm(confirmMessage)) return false;
     const errors = [];
     if (status) status.textContent = "Importazione in corso...";
     try {
         if (selected.has("routine")) {
-            for (const item of importPortableData.routine) {
+            for (const item of dataToImport.routine) {
                 const nome = item.nome || item.filename;
                 if (!nome) continue;
                 const res = await apiFetch(`${API}/routine/save`, { method: "POST", body: JSON.stringify({ filename: nome, routine: item }) });
@@ -2185,7 +2194,7 @@ async function importSelectedData() {
             }
         }
         if (selected.has("sottoroutine")) {
-            for (const item of importPortableData.sottoroutine) {
+            for (const item of dataToImport.sottoroutine) {
                 const nome = item.nome || item.filename;
                 if (!nome) continue;
                 const res = await apiFetch(`${API}/sottoroutine/save`, { method: "POST", body: JSON.stringify({ filename: nome, sottoroutine: item }) });
@@ -2193,31 +2202,33 @@ async function importSelectedData() {
             }
         }
         if (selected.has("piani")) {
-            for (const item of importPortableData.piani) {
+            for (const item of dataToImport.piani) {
                 const nome = item.nome || item.filename;
                 if (!nome) continue;
                 const res = await apiFetch(`${API}/menu/save`, { method: "POST", body: JSON.stringify({ filename: nome, menu: item }) });
                 if (!res.ok) errors.push(`Piano ${nome}`);
             }
         }
-        if (selected.has("inventario") && importPortableData.inventario.length) {
+        if (selected.has("inventario") && dataToImport.inventario.length) {
             const res = await apiFetch(`${API}/inventario/save`, {
                 method: "POST",
-                body: JSON.stringify({ inventario: importPortableData.inventario })
+                body: JSON.stringify({ inventario: dataToImport.inventario })
             });
             if (!res.ok) errors.push("Inventario");
         }
-        if (selected.has("spesa_extra") && importPortableData.spesa_extra.length) {
-            importExtraShoppingColumns(importPortableData.spesa_extra);
+        if (selected.has("spesa_extra") && dataToImport.spesa_extra.length) {
+            importExtraShoppingColumns(dataToImport.spesa_extra);
         }
         await loadPortableData();
         renderPortableExportSelectors();
         if (status) status.textContent = errors.length
             ? `Importazione completata con errori: ${errors.join(", ")}`
             : "Importazione completata.";
+        return !errors.length;
     } catch (e) {
         console.error("Import fallito:", e);
         if (status) status.textContent = `Importazione non riuscita: ${e.message || e}`;
+        return false;
     }
 }
 
