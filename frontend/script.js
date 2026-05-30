@@ -2569,6 +2569,60 @@ function recordTaskStat({ tipo, nome, itemId, titolo, status, justification = ""
     saveStats(stats);
 }
 
+function statStatusLabel(status) {
+    return {
+        completed: "Completata",
+        justified: "Giustificata",
+        missed: "Saltata"
+    }[status] || status || "-";
+}
+
+function statStatusClass(status) {
+    return {
+        completed: "completed",
+        justified: "justified",
+        missed: "missed"
+    }[status] || "";
+}
+
+function finalStatRecords(entries, month = "") {
+    const map = new Map();
+    entries.forEach(entry => {
+        Object.entries(entry.history || {}).forEach(([date, value]) => {
+            if (month && !date.startsWith(month)) return;
+            const logicalKey = [
+                date,
+                normalizeName(entry.tipo),
+                normalizeName(entry.nome),
+                normalizeName(entry.titolo || entry.itemId)
+            ].join("::");
+            const current = map.get(logicalKey);
+            const currentTime = current?.updated_at || "";
+            const nextTime = value.updated_at || "";
+            if (!current || nextTime >= currentTime) {
+                map.set(logicalKey, {
+                    date,
+                    tipo: entry.tipo,
+                    nome: entry.nome,
+                    itemId: entry.itemId,
+                    titolo: entry.titolo || entry.itemId,
+                    status: value.status,
+                    justification: value.justification || "",
+                    updated_at: nextTime
+                });
+            }
+        });
+    });
+    return [...map.values()].filter(item => ["completed", "justified", "missed"].includes(item.status));
+}
+
+function countStatRecords(records) {
+    return records.reduce((acc, item) => {
+        acc[item.status] = (acc[item.status] || 0) + 1;
+        return acc;
+    }, { completed: 0, justified: 0, missed: 0 });
+}
+
 function askSkipJustification(taskLabel) {
     const options = readJustifications();
     const answer = prompt(
@@ -2638,12 +2692,7 @@ async function justifyTodayTasks() {
 }
 
 function statsCounts(entry) {
-    const values = Object.values(entry.history || {});
-    return {
-        completed: values.filter(v => v.status === "completed").length,
-        justified: values.filter(v => v.status === "justified").length,
-        missed: values.filter(v => v.status === "missed").length
-    };
+    return countStatRecords(finalStatRecords([entry]));
 }
 
 function renderJustifications() {
@@ -2690,13 +2739,10 @@ function clearStats() {
 function renderStatsPage() {
     const stats = readStats();
     const entries = Object.values(stats);
-    const totals = entries.reduce((acc, entry) => {
-        const counts = statsCounts(entry);
-        acc.completed += counts.completed;
-        acc.justified += counts.justified;
-        acc.missed += counts.missed;
-        return acc;
-    }, { completed: 0, justified: 0, missed: 0 });
+    const monthInput = document.getElementById("stats-month");
+    const activeMonth = monthInput?.value || new Date().toISOString().slice(0, 7);
+    const finalRecords = finalStatRecords(entries, activeMonth);
+    const totals = countStatRecords(finalRecords);
     const total = totals.completed + totals.justified + totals.missed;
     const effective = totals.completed + totals.justified;
     const rate = total ? Math.round((effective / total) * 100) : 0;
@@ -2711,21 +2757,28 @@ function renderStatsPage() {
     if (rateEl) rateEl.textContent = `${rate}%`;
 
     renderJustifications();
-    renderActivityCharts(entries);
+    renderActivityCharts(finalRecords);
     renderStatsCalendar(entries);
 }
 
-function renderActivityCharts(entries) {
+function renderActivityCharts(records) {
     const container = document.getElementById("activity-charts");
     if (!container) return;
-    if (!entries.length) {
+    if (!records.length) {
         container.innerHTML = `<p class="empty-state">Nessuna statistica ancora. Completa o giustifica attivita dalla dashboard.</p>`;
         return;
     }
-    container.innerHTML = entries
+    const grouped = new Map();
+    records.forEach(record => {
+        const key = [record.tipo, record.nome, record.titolo].map(normalizeName).join("::");
+        if (!grouped.has(key)) grouped.set(key, { ...record, records: [] });
+        grouped.get(key).records.push(record);
+    });
+
+    container.innerHTML = [...grouped.values()]
         .sort((a, b) => (a.titolo || a.itemId).localeCompare(b.titolo || b.itemId))
         .map(entry => {
-            const counts = statsCounts(entry);
+            const counts = countStatRecords(entry.records);
             const total = Math.max(1, counts.completed + counts.justified + counts.missed);
             const completedPct = Math.round((counts.completed / total) * 100);
             const justifiedPct = Math.round((counts.justified / total) * 100);
@@ -2759,14 +2812,14 @@ function renderStatsCalendar(entries) {
     const [year, monthNumber] = month.split("-").map(Number);
     const days = new Date(year, monthNumber, 0).getDate();
     const byDate = {};
-    entries.forEach(entry => {
-        Object.entries(entry.history || {}).forEach(([date, value]) => {
-            if (!date.startsWith(month)) return;
-            if (!byDate[date]) byDate[date] = { completed: 0, justified: 0, missed: 0, labels: [] };
-            byDate[date][value.status] = (byDate[date][value.status] || 0) + 1;
-            byDate[date].labels.push(`${entry.titolo || entry.itemId}: ${value.status}${value.justification ? " - " + value.justification : ""}`);
-        });
+    finalStatRecords(entries, month).forEach(record => {
+        const date = record.date;
+        if (!byDate[date]) byDate[date] = { completed: 0, justified: 0, missed: 0, labels: [], records: [] };
+        byDate[date][record.status] = (byDate[date][record.status] || 0) + 1;
+        byDate[date].records.push(record);
+        byDate[date].labels.push(`${record.titolo}: ${statStatusLabel(record.status)}${record.justification ? " - " + record.justification : ""}`);
     });
+    window.statsCalendarDetails = byDate;
 
     container.innerHTML = Array.from({ length: days }, (_, index) => {
         const day = index + 1;
@@ -2777,12 +2830,55 @@ function renderStatsCalendar(entries) {
             : "";
         const title = data ? escapeHTML(data.labels.join("\n")) : "";
         return `
-            <div class="calendar-day ${cls}" title="${title}">
+            <button class="calendar-day ${cls}" title="${title}" type="button" onclick="showStatsDayDetail('${date}')" ${data ? "" : "disabled"}>
                 <strong>${day}</strong>
                 ${data ? `<span>${data.completed || 0}/${data.justified || 0}/${data.missed || 0}</span>` : "<span>-</span>"}
-            </div>
+            </button>
         `;
     }).join("");
+}
+
+function showStatsDayDetail(date) {
+    const data = window.statsCalendarDetails?.[date];
+    if (!data) return;
+    const detail = document.getElementById("stats-day-detail");
+    if (!detail) return;
+    const title = new Date(`${date}T12:00:00`).toLocaleDateString("it-IT", {
+        weekday: "long",
+        day: "2-digit",
+        month: "long",
+        year: "numeric"
+    });
+    const records = [...data.records].sort((a, b) => {
+        const order = { completed: 0, justified: 1, missed: 2 };
+        return (order[a.status] ?? 9) - (order[b.status] ?? 9) || (a.titolo || "").localeCompare(b.titolo || "");
+    });
+    detail.innerHTML = `
+        <div class="stats-day-card">
+            <div class="stats-day-head">
+                <div>
+                    <span>Dettaglio giornata</span>
+                    <strong>${escapeHTML(title)}</strong>
+                </div>
+                <button class="btn outline" onclick="document.getElementById('stats-day-detail').innerHTML=''">Chiudi</button>
+            </div>
+            <div class="stats-day-summary">
+                <span class="completed">Completate ${data.completed || 0}</span>
+                <span class="justified">Giustificate ${data.justified || 0}</span>
+                <span class="missed">Saltate ${data.missed || 0}</span>
+            </div>
+            <div class="stats-day-list">
+                ${records.map(record => `
+                    <article class="stats-day-item ${statStatusClass(record.status)}">
+                        <strong>${escapeHTML(record.titolo || record.itemId)}</strong>
+                        <span>${escapeHTML(record.nome || "")} - ${escapeHTML(statStatusLabel(record.status))}</span>
+                        ${record.justification ? `<em>${escapeHTML(record.justification)}</em>` : ""}
+                    </article>
+                `).join("")}
+            </div>
+        </div>
+    `;
+    detail.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
 async function caricaDettagliDaLista(endpoint, listResult) {

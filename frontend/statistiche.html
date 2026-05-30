@@ -10,7 +10,7 @@
     <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
     <link rel="manifest" href="site.webmanifest?v=routineos-pwa-2">
     <meta name="theme-color" content="#081724">
-    <link rel="stylesheet" href="styles.css?v=routineos-visual-13">
+    <link rel="stylesheet" href="styles.css?v=routineos-visual-14">
     <link rel="stylesheet" href="routineos-ui.css?v=routineos-ui-4">
 </head>
 <body class="routineos-page stats-page">
@@ -90,12 +90,13 @@
                     <input id="stats-month" type="month" onchange="renderStatsPage()" style="max-width:180px;">
                 </header>
                 <div id="stats-calendar" class="stats-calendar"></div>
+                <div id="stats-day-detail" class="stats-day-detail"></div>
             </section>
         </main>
     </div>
     <script src="config.js?v=routineos-config-1"></script>
 
-    <script src="script.js?v=routineos-api-17"></script>
+    <script src="script.js?v=routineos-api-18"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const month = document.getElementById('stats-month');
@@ -105,6 +106,7 @@
     </script>
 </body>
 </html>
+
 
 
 
