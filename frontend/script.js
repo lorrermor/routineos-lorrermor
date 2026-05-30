@@ -725,6 +725,16 @@ async function jsonOrThrow(res, label) {
     return data;
 }
 
+async function fetchJsonOrDefault(url, fallback, label) {
+    try {
+        const res = await apiFetch(url);
+        return await jsonOrThrow(res, label);
+    } catch (e) {
+        console.warn(`Dato non disponibile per ${label}:`, e);
+        return fallback;
+    }
+}
+
 function isRoutineDue(item, oggi = new Date()) {
     if (!inIntervallo(oggi, item.inizio, item.fine)) return false;
     const excludedDays = item.giorni_esclusi || item.exclude_days || [];
@@ -1578,40 +1588,36 @@ async function initDataPortability() {
 async function loadPortableData() {
     const status = document.getElementById("export-status");
     if (status) status.textContent = "Carico i dati disponibili...";
-    try {
-        const [routineListRes, subListRes, menuListRes, invRes] = await Promise.all([
-            apiFetch(`${API}/routine/list`),
-            apiFetch(`${API}/sottoroutine/list`),
-            apiFetch(`${API}/menu/list`),
-            apiFetch(`${API}/get-inventario`)
-        ]);
+    const warnings = [];
+    const [routineList, subList, menuList, inventario] = await Promise.all([
+        fetchJsonOrDefault(`${API}/routine/list`, [], "routine/list"),
+        fetchJsonOrDefault(`${API}/sottoroutine/list`, [], "sottoroutine/list"),
+        fetchJsonOrDefault(`${API}/menu/list`, [], "menu/list"),
+        fetchJsonOrDefault(`${API}/get-inventario`, {}, "get-inventario")
+    ]);
 
-        const routineList = await jsonOrThrow(routineListRes, "routine/list");
-        const subList = await jsonOrThrow(subListRes, "sottoroutine/list");
-        const menuList = await jsonOrThrow(menuListRes, "menu/list");
-        const inventario = invRes.ok ? await invRes.json() : {};
+    const [routineResult, subResult, menuResult] = await Promise.allSettled([
+        caricaDettagliDaLista("routine", routineList),
+        caricaDettagliDaLista("sottoroutine", subList),
+        loadMenuPlanDetails(menuList)
+    ]);
+    if (routineResult.status === "rejected") warnings.push("routine");
+    if (subResult.status === "rejected") warnings.push("sottoroutine");
+    if (menuResult.status === "rejected") warnings.push("menu");
 
-        const [routine, sottoroutine, piani] = await Promise.all([
-            caricaDettagliDaLista("routine", routineList),
-            caricaDettagliDaLista("sottoroutine", subList),
-            loadMenuPlanDetails(menuList)
-        ]);
-
-        exportPortableData = {
-            routine,
-            sottoroutine,
-            piani,
-            inventario: Object.entries(inventario || {}).map(([nome, item]) => ({ nome, ...item })),
-            spesa_extra: portableExtraShoppingColumns(),
-            dashboard_comments: readStoredList(dashboardCommentsKey()),
-            dashboard_notes: readStoredList(dashboardNotesKey()),
-            sheets: loadSheets()
-        };
-        if (status) status.textContent = "Dati pronti per esportazione o importazione.";
-    } catch (e) {
-        console.error("Errore caricamento esportazione:", e);
-        if (status) status.textContent = `Errore caricamento dati: ${e.message || e}`;
-    }
+    exportPortableData = {
+        routine: routineResult.status === "fulfilled" ? routineResult.value : [],
+        sottoroutine: subResult.status === "fulfilled" ? subResult.value : [],
+        piani: menuResult.status === "fulfilled" ? menuResult.value : [],
+        inventario: Object.entries(inventario || {}).map(([nome, item]) => ({ nome, ...item })),
+        spesa_extra: portableExtraShoppingColumns(),
+        dashboard_comments: readStoredList(dashboardCommentsKey()),
+        dashboard_notes: readStoredList(dashboardNotesKey()),
+        sheets: loadSheets()
+    };
+    if (status) status.textContent = warnings.length
+        ? `Dati caricati parzialmente. Controlla: ${warnings.join(", ")}.`
+        : "Dati pronti per esportazione o importazione.";
 }
 
 async function loadMenuPlanDetails(menuList) {
@@ -2263,8 +2269,12 @@ async function importPortableDataSet(portableData, selectedTypes, status = null,
         if (selected.has("sheets") && dataToImport.sheets.length) {
             saveSheets(mergeSheetsCollections(loadSheets(), dataToImport.sheets));
         }
-        await loadPortableData();
-        renderPortableExportSelectors();
+        try {
+            await loadPortableData();
+            renderPortableExportSelectors();
+        } catch (refreshError) {
+            console.warn("Refresh dopo import non riuscito:", refreshError);
+        }
         if (status) status.textContent = errors.length
             ? `Importazione completata con errori: ${errors.join(", ")}`
             : "Importazione completata.";

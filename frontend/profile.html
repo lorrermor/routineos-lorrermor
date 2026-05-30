@@ -353,7 +353,7 @@
     <script src="config.js?v=routineos-config-1"></script>
 
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-    <script src="script.js?v=routineos-api-13"></script>
+    <script src="script.js?v=routineos-api-14"></script>
     <script>
         let profileSocial = {
             nickname: '',
@@ -816,18 +816,19 @@
                 return `
                     <section class="share-preview-card is-detailed">
                         <label class="share-preview-card-head">
-                            <span><input type="checkbox" data-share-import-type="${key}" ${values.length ? 'checked' : ''} ${values.length ? '' : 'disabled'}> ${escapeHTML(title)}</span>
+                            <span><input type="checkbox" data-share-import-type="${key}" onchange="toggleShareImportGroup('${key}', this.checked)" ${values.length ? 'checked' : ''} ${values.length ? '' : 'disabled'}> ${escapeHTML(title)}</span>
                             <strong>${values.length} elementi</strong>
                         </label>
                         <div class="share-preview-items">
-                            ${values.length ? values.map(entry => `
-                                <article class="share-preview-item">
+                            ${values.length ? values.map((entry, index) => `
+                                <label class="share-preview-item">
+                                    <input type="checkbox" data-share-import-item-type="${key}" data-share-import-index="${index}" checked>
                                     <span>
                                         <strong>${escapeHTML(typeof portableLabel === 'function' ? portableLabel(key, entry) : (entry.nome || entry.title || entry.filename || 'Elemento'))}</strong>
                                         <small>${escapeHTML(typeof portableSummary === 'function' ? portableSummary(key, entry) : '')}</small>
                                         <em>${escapeHTML(typeof portableDetails === 'function' ? portableDetails(key, entry) : '')}</em>
                                     </span>
-                                </article>
+                                </label>
                             `).join('') : '<p class="portable-empty">Nessun elemento in questa categoria.</p>'}
                         </div>
                     </section>
@@ -846,6 +847,31 @@
                 <div id="share-import-status" class="connection-meta"></div>
             `;
             panel.classList.add('is-open');
+        }
+
+        function toggleShareImportGroup(type, checked) {
+            document.querySelectorAll(`[data-share-import-item-type="${type}"]`).forEach(input => {
+                input.checked = checked;
+            });
+        }
+
+        function selectedShareImportData(item) {
+            const normalized = typeof normalizePortableData === 'function' ? normalizePortableData(item.data || {}) : (item.data || {});
+            const itemChecks = [...document.querySelectorAll('[data-share-import-item-type]')];
+            if (!itemChecks.length || selectedShareId !== item.id) return normalized;
+            const selectedData = {};
+            const groups = typeof portableGroups !== 'undefined' ? portableGroups : [];
+            groups.forEach(group => {
+                selectedData[group.key] = [];
+            });
+            itemChecks.filter(input => input.checked).forEach(input => {
+                const type = input.dataset.shareImportItemType;
+                const index = parseInt(input.dataset.shareImportIndex, 10);
+                const value = (normalized[type] || [])[index];
+                if (!selectedData[type]) selectedData[type] = [];
+                if (value) selectedData[type].push(value);
+            });
+            return selectedData;
         }
 
         function previewShareItem(id) {
@@ -868,7 +894,8 @@
                 if (status) status.textContent = 'Seleziona almeno una categoria da inserire.';
                 return;
             }
-            const ok = await importPortableDataSet(item.data || {}, selected, status, 'Inserire i dati selezionati nel tuo account? Gli elementi con lo stesso nome verranno aggiornati.');
+            const selectedData = selectedShareId === id ? selectedShareImportData(item) : (item.data || {});
+            const ok = await importPortableDataSet(selectedData, selected, status, 'Inserire i dati selezionati nel tuo account? Gli elementi con lo stesso nome verranno aggiornati.');
             if (ok && status) status.textContent = 'Condivisione inserita nel tuo account.';
         }
 
