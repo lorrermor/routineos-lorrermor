@@ -842,6 +842,36 @@ td { padding: 12px; border-bottom: 1px solid #334155; }
   min-width: 0;
   overflow: hidden;
   font-size: inherit;
+  border-radius: 4px;
+  padding: 1px;
+}
+
+.calendar-counts .completed { color: #047857; background: #ecfdf5; }
+.calendar-counts .justified { color: #a16207; background: #fffbeb; }
+.calendar-counts .missed { color: #b91c1c; background: #fef2f2; }
+
+.stats-sort-control {
+  display: grid;
+  gap: 5px;
+  min-width: 190px;
+}
+
+.stats-sort-control span {
+  color: var(--dim);
+  font-size: 0.78rem;
+}
+
+.dashboard-history-panel {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.historical-add-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  margin-top: 14px;
 }
 
 .calendar-day:disabled {
@@ -1752,13 +1782,22 @@ datalist option {
   }
 
   .calendar-day {
-    min-height: 54px;
-    padding: 4px 2px;
+    min-height: 72px;
+    padding: 5px 3px;
     border-radius: 7px;
   }
 
   .calendar-day span {
-    font-size: 0.58rem;
+    font-size: 0.62rem;
+  }
+
+  .calendar-counts {
+    grid-template-columns: 1fr;
+    gap: 1px;
+  }
+
+  .historical-add-row {
+    grid-template-columns: 1fr;
   }
 }
 

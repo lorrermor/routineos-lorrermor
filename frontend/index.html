@@ -10,7 +10,7 @@
     <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
     <link rel="manifest" href="site.webmanifest?v=routineos-pwa-2">
     <meta name="theme-color" content="#081724">
-    <link rel="stylesheet" href="styles.css?v=routineos-visual-15">
+    <link rel="stylesheet" href="styles.css?v=routineos-visual-16">
     <style>
         .shop-badge {
             background: var(--success);
@@ -163,6 +163,17 @@
                 <div id="today-routines-display">
                     <p class="empty-state">Sto cercando le routine di oggi...</p>
                 </div>
+                <div id="dashboard-history-panel" class="dashboard-history-panel" hidden>
+                    <header class="stats-section-head">
+                        <div>
+                            <h3>Cronologia attività</h3>
+                            <p>Seleziona un giorno per correggere lo stato di un'attività passata.</p>
+                        </div>
+                        <input id="dashboard-history-month" type="month" onchange="renderDashboardHistoryCalendar()">
+                    </header>
+                    <div id="dashboard-history-calendar" class="stats-calendar"></div>
+                    <div id="dashboard-history-detail" class="stats-day-detail"></div>
+                </div>
             </section>
 
             <section class="card">
@@ -203,10 +214,9 @@
     </div>
     <script src="config.js?v=routineos-config-1"></script>
 
-    <script src="script.js?v=routineos-api-20"></script>
+    <script src="script.js?v=routineos-api-21"></script>
 </body>
 </html>
-
 
 
 

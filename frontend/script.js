@@ -250,7 +250,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         caricaCronologia();
     }
 
-    if (document.getElementById('stats-calendar')) {
+    if (document.getElementById('stats-calendar') || document.getElementById('dashboard-history-panel')) {
         initStatsFrequencyMetadata();
     }
 });
@@ -2648,6 +2648,8 @@ function countStatRecords(records) {
 }
 
 window.statsFrequencyByName = window.statsFrequencyByName || {};
+window.statsOrderByTask = window.statsOrderByTask || {};
+window.statsAvailableTasks = window.statsAvailableTasks || [];
 
 function statFrequency(record) {
     return record.frequenza
@@ -2655,9 +2657,34 @@ function statFrequency(record) {
         || (record.tipo === "menu" ? "giornaliera" : "personalizzata");
 }
 
+function statTaskOrder(record) {
+    const exact = `${normalizeName(record.nome)}::${normalizeName(record.titolo || record.itemId)}`;
+    return window.statsOrderByTask[exact]
+        ?? window.statsOrderByTask[normalizeName(record.titolo || record.itemId)]
+        ?? Number.MAX_SAFE_INTEGER;
+}
+
 function compareStatsByFrequency(a, b) {
     return routineFrequencyRank(statFrequency(a)) - routineFrequencyRank(statFrequency(b))
+        || statTaskOrder(a) - statTaskOrder(b)
         || (a.titolo || a.itemId || "").localeCompare(b.titolo || b.itemId || "");
+}
+
+function statCompletionScore(entry) {
+    const records = entry.records || [entry];
+    if (!records.length) return 0;
+    return records.reduce((total, record) => total + (record.status === "completed" ? 1 : record.status === "justified" ? 0.5 : 0), 0) / records.length;
+}
+
+function statsSortMode() {
+    return document.getElementById("stats-sort")?.value || "standard";
+}
+
+function compareStatsRecords(a, b) {
+    const mode = statsSortMode();
+    if (mode === "completion-asc") return statCompletionScore(a) - statCompletionScore(b) || compareStatsByFrequency(a, b);
+    if (mode === "completion-desc") return statCompletionScore(b) - statCompletionScore(a) || compareStatsByFrequency(a, b);
+    return compareStatsByFrequency(a, b);
 }
 
 async function initStatsFrequencyMetadata() {
@@ -2674,9 +2701,25 @@ async function initStatsFrequencyMetadata() {
             caricaDettagliDaLista("routine", routineList),
             caricaDettagliDaLista("sottoroutine", sottoroutineList)
         ]);
+        let taskOrder = 0;
         [...routine, ...sottoroutine].forEach(item => {
             window.statsFrequencyByName[normalizeName(item.nome)] = item.frequenza || "personalizzata";
+            normalizzaElementiRoutine(item).forEach((elemento, index) => {
+                const title = routineElementTitle(elemento, item);
+                const exact = `${normalizeName(item.nome)}::${normalizeName(title)}`;
+                if (window.statsOrderByTask[exact] === undefined) window.statsOrderByTask[exact] = taskOrder;
+                if (window.statsOrderByTask[normalizeName(title)] === undefined) window.statsOrderByTask[normalizeName(title)] = taskOrder;
+                window.statsAvailableTasks.push({
+                    tipo: item.tipo || "agenda",
+                    nome: item.nome,
+                    itemId: elemento.id || `${item.nome}-${index}`,
+                    titolo: title,
+                    frequenza: item.frequenza || "personalizzata"
+                });
+                taskOrder += 1;
+            });
         });
+        window.statsAvailableTasks = [...new Map(window.statsAvailableTasks.map(task => [taskStatsId(task.tipo, task.nome, task.itemId), task])).values()];
         renderStatsPage();
     } catch (e) {
         console.warn("Frequenze statistiche non caricate:", e);
@@ -2840,7 +2883,7 @@ function renderActivityCharts(records) {
     });
 
     container.innerHTML = [...grouped.values()]
-        .sort(compareStatsByFrequency)
+        .sort(compareStatsRecords)
         .map(entry => {
             const counts = countStatRecords(entry.records);
             const total = Math.max(1, counts.completed + counts.justified + counts.missed);
@@ -2896,7 +2939,7 @@ function renderStatsCalendar(entries) {
         return `
             <button class="calendar-day ${cls}" title="${title}" type="button" onclick="showStatsDayDetail('${date}')" ${data ? "" : "disabled"}>
                 <strong>${day}</strong>
-                ${data ? `<span class="calendar-counts"><small>${data.completed || 0}</small><small>${data.justified || 0}</small><small>${data.missed || 0}</small></span>` : "<span>-</span>"}
+                ${data ? `<span class="calendar-counts"><small class="completed">C ${data.completed || 0}</small><small class="justified">G ${data.justified || 0}</small><small class="missed">S ${data.missed || 0}</small></span>` : "<span>-</span>"}
             </button>
         `;
     }).join("");
@@ -2915,7 +2958,7 @@ function showStatsDayDetail(date) {
     });
     const records = [...data.records].sort((a, b) => {
         const order = { completed: 0, justified: 1, missed: 2 };
-        return compareStatsByFrequency(a, b) || (order[a.status] ?? 9) - (order[b.status] ?? 9);
+        return compareStatsRecords(a, b) || (order[a.status] ?? 9) - (order[b.status] ?? 9);
     });
     detail.innerHTML = `
         <div class="stats-day-card">
@@ -2999,6 +3042,151 @@ function dashboardShowsCompleted() {
 function toggleDashboardCompleted() {
     localStorage.setItem(dashboardCompletedStorageKey(), dashboardShowsCompleted() ? "0" : "1");
     caricaRoutineDiOggi();
+}
+
+function toggleDashboardHistory() {
+    const panel = document.getElementById("dashboard-history-panel");
+    const month = document.getElementById("dashboard-history-month");
+    if (!panel || !month) return;
+    panel.hidden = !panel.hidden;
+    if (!panel.hidden) {
+        if (!month.value) month.value = localISODate().slice(0, 7);
+        renderDashboardHistoryCalendar();
+        panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+}
+
+function renderDashboardHistoryCalendar() {
+    const container = document.getElementById("dashboard-history-calendar");
+    const monthInput = document.getElementById("dashboard-history-month");
+    if (!container || !monthInput) return;
+    const month = monthInput.value || localISODate().slice(0, 7);
+    const [year, monthNumber] = month.split("-").map(Number);
+    const days = new Date(year, monthNumber, 0).getDate();
+    const byDate = {};
+    finalStatRecords(Object.values(readStats()), month).forEach(record => {
+        if (!byDate[record.date]) byDate[record.date] = { completed: 0, justified: 0, missed: 0, records: [] };
+        byDate[record.date][record.status] += 1;
+        byDate[record.date].records.push(record);
+    });
+    window.dashboardHistoryDetails = byDate;
+    container.innerHTML = Array.from({ length: days }, (_, index) => {
+        const day = index + 1;
+        const date = `${month}-${String(day).padStart(2, "0")}`;
+        const data = byDate[date];
+        const cls = data ? data.missed ? "missed" : data.justified ? "justified" : "completed" : "";
+        return `
+            <button class="calendar-day ${cls}" type="button" onclick="showDashboardHistoryDay('${date}')">
+                <strong>${day}</strong>
+                ${data ? `<span class="calendar-counts"><small class="completed">C ${data.completed || 0}</small><small class="justified">G ${data.justified || 0}</small><small class="missed">S ${data.missed || 0}</small></span>` : "<span>-</span>"}
+            </button>
+        `;
+    }).join("");
+}
+
+function historicalStatusOptions(selected) {
+    return [
+        ["completed", "Completata"],
+        ["justified", "Giustificata"],
+        ["missed", "Saltata"],
+        ["", "Non registrata"]
+    ].map(([value, label]) => `<option value="${value}" ${selected === value ? "selected" : ""}>${label}</option>`).join("");
+}
+
+function showDashboardHistoryDay(date) {
+    const data = window.dashboardHistoryDetails?.[date] || { completed: 0, justified: 0, missed: 0, records: [] };
+    const detail = document.getElementById("dashboard-history-detail");
+    if (!data || !detail) return;
+    const records = [...data.records].sort(compareStatsRecords);
+    detail.innerHTML = `
+        <div class="stats-day-card">
+            <div class="stats-day-head">
+                <div>
+                    <span>Correggi giornata</span>
+                    <strong>${escapeHTML(new Date(`${date}T12:00:00`).toLocaleDateString("it-IT", { weekday: "long", day: "2-digit", month: "long", year: "numeric" }))}</strong>
+                </div>
+                <button class="btn outline" onclick="document.getElementById('dashboard-history-detail').innerHTML=''">Chiudi</button>
+            </div>
+            <div class="stats-day-list">
+                ${records.length ? records.map(record => `
+                    <article class="stats-day-item ${statStatusClass(record.status)}">
+                        <strong>${escapeHTML(record.titolo || record.itemId)}</strong>
+                        <span>${escapeHTML(record.nome || "")} - ${escapeHTML(statFrequency(record))}</span>
+                        ${record.justification ? `<em>${escapeHTML(record.justification)}</em>` : ""}
+                        <select onchange="updateHistoricalTaskStat('${date}', '${safeEncoded(record.tipo)}', '${safeEncoded(record.nome)}', '${safeEncoded(record.itemId)}', '${safeEncoded(record.titolo)}', '${safeEncoded(statFrequency(record))}', this.value)">
+                            ${historicalStatusOptions(record.status)}
+                        </select>
+                    </article>
+                `).join("") : `<p class="empty-state">Nessuna attività registrata per questa giornata.</p>`}
+            </div>
+            <div class="historical-add-row">
+                <select id="dashboard-history-add-task">
+                    ${historicalAvailableTaskOptions()}
+                </select>
+                <button class="btn outline" onclick="addHistoricalTask('${date}')">Aggiungi attività</button>
+            </div>
+        </div>
+    `;
+}
+
+function historicalAvailableTaskOptions() {
+    const configured = window.statsAvailableTasks || [];
+    const tracked = Object.values(readStats()).map(entry => ({
+        tipo: entry.tipo,
+        nome: entry.nome,
+        itemId: entry.itemId,
+        titolo: entry.titolo || entry.itemId,
+        frequenza: entry.frequenza || statFrequency(entry)
+    }));
+    window.historicalTaskChoices = [...new Map([...configured, ...tracked]
+        .map(task => [taskStatsId(task.tipo, task.nome, task.itemId), task])).values()]
+        .sort(compareStatsRecords);
+    return window.historicalTaskChoices.length
+        ? window.historicalTaskChoices.map((task, index) => `<option value="${index}">${escapeHTML(task.titolo)} - ${escapeHTML(task.nome)}</option>`).join("")
+        : `<option value="">Nessuna attività configurata</option>`;
+}
+
+async function addHistoricalTask(date) {
+    const select = document.getElementById("dashboard-history-add-task");
+    const task = window.historicalTaskChoices?.[Number(select?.value)];
+    if (!task) return;
+    recordTaskStat({ ...task, status: "completed", date });
+    if (date === localISODate()) {
+        await apiFetch(`${API}/completamenti/toggle`, {
+            method: "POST",
+            body: JSON.stringify({ tipo: task.tipo, piano_nome: task.nome, item_id: task.itemId, completato: true })
+        });
+        caricaRoutineDiOggi();
+    }
+    renderDashboardHistoryCalendar();
+    showDashboardHistoryDay(date);
+}
+
+async function updateHistoricalTaskStat(date, tipoEncoded, nomeEncoded, itemIdEncoded, titoloEncoded, frequenzaEncoded, status) {
+    const tipo = decodeURIComponent(tipoEncoded);
+    const nome = decodeURIComponent(nomeEncoded);
+    const itemId = decodeURIComponent(itemIdEncoded);
+    const titolo = decodeURIComponent(titoloEncoded);
+    const frequenza = decodeURIComponent(frequenzaEncoded || "");
+    if (!status) {
+        removeTaskStat(tipo, nome, itemId, date);
+    } else {
+        const justification = status === "justified" ? askSkipJustification(titolo) : "";
+        recordTaskStat({ tipo, nome, itemId, titolo, frequenza, status, justification, date });
+    }
+    if (date === localISODate()) {
+        await apiFetch(`${API}/completamenti/toggle`, {
+            method: "POST",
+            body: JSON.stringify({ tipo, piano_nome: nome, item_id: itemId, completato: status === "completed" })
+        });
+        caricaRoutineDiOggi();
+    }
+    renderDashboardHistoryCalendar();
+    if (window.dashboardHistoryDetails?.[date]?.records?.length) {
+        showDashboardHistoryDay(date);
+    } else {
+        document.getElementById("dashboard-history-detail").innerHTML = "";
+    }
 }
 
 async function caricaRoutineDiOggi() {
@@ -3181,7 +3369,8 @@ async function caricaRoutineDiOggi() {
 
         savePendingTasks(pending);
         const rows = [...rowsDovute, ...rowsPending];
-        const completedRows = rows.filter(row => row.completed);
+        const todayCompletedCount = finalStatRecords(Object.values(readStats()), localISODate().slice(0, 7))
+            .filter(record => record.date === localISODate() && record.status === "completed").length;
         const visibleRows = dashboardShowsCompleted() ? rows : rows.filter(row => !row.completed);
         window.todayStatsTasks = rows.map(row => ({
             tipo: row.tipo,
@@ -3210,6 +3399,7 @@ async function caricaRoutineDiOggi() {
                         Trovate: ${routine.length} routine, ${sottoroutine.length} sottoroutine.
                         Dovute oggi: ${routineDovute.length} routine, ${sottoroutineDovute.length} sottoroutine.
                     </p>
+                    <button class="btn outline" onclick="toggleDashboardHistory()">Cronologia attività</button>
                 </div>
             `;
             return;
@@ -3220,7 +3410,8 @@ async function caricaRoutineDiOggi() {
                 <div class="dashboard-section-head">
                     <h3>Agenda</h3>
                     <div class="dashboard-section-actions">
-                        ${completedRows.length ? `<button class="btn outline" onclick="toggleDashboardCompleted()">${dashboardShowsCompleted() ? "Nascondi completate" : `Mostra completate (${completedRows.length})`}</button>` : ""}
+                        ${todayCompletedCount ? `<button class="btn outline" onclick="toggleDashboardCompleted()">${dashboardShowsCompleted() ? "Nascondi completate" : `Completate oggi (${todayCompletedCount})`}</button>` : ""}
+                        <button class="btn outline" onclick="toggleDashboardHistory()">Cronologia attività</button>
                         <button class="btn outline day-justify-btn" onclick="justifyTodayTasks()">Giustifica giornata</button>
                     </div>
                 </div>
