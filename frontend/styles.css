@@ -245,6 +245,13 @@ td { padding: 12px; border-bottom: 1px solid #334155; }
   margin: 0;
 }
 
+.dashboard-section-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .day-justify-btn {
   width: auto;
   min-width: 150px;
@@ -814,6 +821,9 @@ td { padding: 12px; border-bottom: 1px solid #334155; }
 .calendar-day span {
   color: var(--dim);
   font-size: 0.78rem;
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
 }
 
 .calendar-day:disabled {
@@ -1712,6 +1722,25 @@ datalist option {
   .task-row,
   .task-row.stat-task-row {
     grid-template-columns: 40px minmax(0, 1fr);
+  }
+
+  .dashboard-section-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .stats-calendar {
+    gap: 4px;
+  }
+
+  .calendar-day {
+    min-height: 54px;
+    padding: 5px;
+    border-radius: 7px;
+  }
+
+  .calendar-day span {
+    font-size: 0.64rem;
   }
 }
 

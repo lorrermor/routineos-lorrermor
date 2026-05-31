@@ -254,6 +254,12 @@ def delete_dedicated_user_config(user_id: str, key: str):
 
 
 def load_profile_data(user_id: str, token: str) -> dict:
+    try:
+        rows = supabase.table("profili_app").select("valore").eq("user_id", user_id).execute().data or []
+        if rows and isinstance(rows[0].get("valore"), dict):
+            return rows[0]["valore"]
+    except Exception:
+        pass
     rows = rest_select_user_rows(
         "config",
         user_id,
@@ -289,13 +295,21 @@ def lightweight_profile_metadata(profile_data: dict) -> dict:
 
 
 def save_profile_data(user_id: str, token: str, profile_data: dict):
+    supabase.table("profili_app").upsert({
+        "user_id": user_id,
+        "valore": profile_data,
+        "updated_at": datetime.now().isoformat()
+    }).execute()
     key = profile_config_key(user_id)
-    rest_delete_rows("config", {"chiave": key, "user_id": user_id}, token)
-    rest_insert_user_row("config", {
-        "chiave": key,
-        "valore": json.dumps(profile_data),
-        "user_id": user_id
-    }, token)
+    try:
+        rest_delete_rows("config", {"chiave": key, "user_id": user_id}, token)
+        rest_insert_user_row("config", {
+            "chiave": key,
+            "valore": json.dumps(profile_data),
+            "user_id": user_id
+        }, token)
+    except Exception as e:
+        print(f"Backup profilo legacy non aggiornato: {e}")
 
 
 def normalize_user_code(value: str) -> str:
@@ -1365,7 +1379,7 @@ def delete_sottoroutine(nome: str, authorization: str = Header(None), user_id: s
 @app.get("/completamenti/oggi")
 def get_completamenti_oggi(authorization: str = Header(None), user_id: str = Depends(get_user_id)):
     """Restituisce tutti i completamenti dell'utente per oggi."""
-    oggi = datetime.now().strftime("%Y-%m-%d")
+    oggi = logica.local_now().strftime("%Y-%m-%d")
     return rest_select_user_rows(
         "completamenti",
         user_id,
@@ -1381,7 +1395,7 @@ async def toggle_completamento(data: dict, authorization: str = Header(None), us
     Crea o aggiorna una spunta per un task.
     Payload: { tipo, piano_nome, item_id, completato }
     """
-    oggi = datetime.now().strftime("%Y-%m-%d")
+    oggi = logica.local_now().strftime("%Y-%m-%d")
     payload = {
         "user_id": user_id,
         "data": oggi,
@@ -1419,7 +1433,7 @@ async def get_system_log(user_id: str = Depends(get_user_id)):
 
 @app.get("/system/info")
 def get_info():
-    now = datetime.now()
+    now = logica.local_now()
     mese = now.month
     mesi = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"]
     if mese in [12, 1, 2]:   stag = "Inverno"
@@ -1466,16 +1480,32 @@ async def run_daily_updates(x_cron_secret: str = Header(None)):
 
 @app.get("/system/status-oggi")
 async def get_status_oggi(user_id: str = Depends(get_user_id)):
-    oggi = datetime.now().strftime("%Y-%m-%d")
+    oggi = logica.local_now().strftime("%Y-%m-%d")
     try:
         logica.ensure_sync_config(user_id)
         res = supabase.table("config").select("valore")\
             .eq("chiave", logica.get_sync_key(user_id)).execute()
         valore_db = res.data[0]["valore"] if res.data else ""
         annullato = (valore_db == f"{oggi}_annullato")
-        return {"data": oggi, "scarico_annullato": annullato}
+        return {
+            "data": oggi,
+            "scarico_annullato": annullato,
+            "scarico_automatico_in_pausa": logica.is_auto_sync_paused(user_id)
+        }
     except Exception:
-        return {"data": oggi, "scarico_annullato": False}
+        return {"data": oggi, "scarico_annullato": False, "scarico_automatico_in_pausa": False}
+
+
+@app.post("/system/auto-sync-pause")
+async def set_auto_sync_pause(data: dict, user_id: str = Depends(get_user_id)):
+    paused = bool(data.get("paused"))
+    if logica.set_auto_sync_paused(user_id, paused):
+        return {
+            "status": "success",
+            "scarico_automatico_in_pausa": paused,
+            "message": "Scarico automatico in pausa." if paused else "Scarico automatico riattivato."
+        }
+    raise HTTPException(status_code=500, detail="Impossibile aggiornare la pausa dello scarico automatico.")
 
 
 @app.post("/system/rollback-today")

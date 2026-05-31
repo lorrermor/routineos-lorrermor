@@ -1,7 +1,8 @@
 import re
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 from supabase import create_client, Client
 
 # --- CONFIGURAZIONE ---
@@ -37,16 +38,63 @@ URL_SB = required_env("SUPABASE_URL")
 KEY_SB = required_env("SUPABASE_KEY")
 
 supabase: Client = create_client(URL_SB, KEY_SB)
+ROME_TZ = ZoneInfo("Europe/Rome")
 
 # --- UTILITY ---
+def local_now():
+    return datetime.now(ROME_TZ)
+
+
 def get_today_name():
     """Restituisce il nome del giorno in italiano."""
     giorni = ["Lunedi", "Martedi", "Mercoledi", "Giovedi", "Venerdi", "Sabato", "Domenica"]
-    return giorni[datetime.now().weekday()]
+    return giorni[local_now().weekday()]
 
 
 def get_sync_key(user_id):
     return f"last_sync:{user_id}"
+
+
+def get_pause_key(user_id):
+    return f"auto_sync_paused:{user_id}"
+
+
+def is_auto_sync_paused(user_id):
+    try:
+        res = supabase.table("config").select("valore")\
+            .eq("chiave", get_pause_key(user_id))\
+            .eq("user_id", user_id)\
+            .execute()
+        valore = res.data[0]["valore"] if res.data else ""
+        return str(valore).lower() in ("1", "true", "si", "paused")
+    except Exception as e:
+        print(f"Errore lettura pausa scarico: {e}")
+        return False
+
+
+def set_auto_sync_paused(user_id, paused):
+    pause_key = get_pause_key(user_id)
+    try:
+        res = supabase.table("config").select("chiave")\
+            .eq("chiave", pause_key)\
+            .eq("user_id", user_id)\
+            .execute()
+        valore = "true" if paused else "false"
+        if res.data:
+            supabase.table("config").update({"valore": valore})\
+                .eq("chiave", pause_key)\
+                .eq("user_id", user_id)\
+                .execute()
+        else:
+            supabase.table("config").insert({
+                "chiave": pause_key,
+                "valore": valore,
+                "user_id": user_id
+            }).execute()
+        return True
+    except Exception as e:
+        print(f"Errore salvataggio pausa scarico: {e}")
+        return False
 
 
 def ensure_sync_config(user_id):
@@ -107,9 +155,10 @@ def get_log(user_id):
         for l in res.data:
             raw_date = str(l.get('created_at', ''))
             try:
-                data_pulita = raw_date.replace('T', ' ').split('.')[0]
-                dt_obj = datetime.strptime(data_pulita, "%Y-%m-%d %H:%M:%S")
-                data_it = dt_obj.strftime("%d/%m/%Y %H:%M:%S")
+                dt_obj = datetime.fromisoformat(raw_date.replace("Z", "+00:00"))
+                if dt_obj.tzinfo is None:
+                    dt_obj = dt_obj.replace(tzinfo=timezone.utc)
+                data_it = dt_obj.astimezone(ROME_TZ).strftime("%d/%m/%Y %H:%M:%S")
             except:
                 data_it = raw_date
 
@@ -127,9 +176,11 @@ def get_log(user_id):
 
 # --- GESTIONE SYNC GIORNALIERO ---
 def check_daily_update(user_id, force=False):
-    oggi_str = datetime.now().strftime("%Y-%m-%d")
+    oggi_str = local_now().strftime("%Y-%m-%d")
 
     try:
+        if not force and is_auto_sync_paused(user_id):
+            return False
         ensure_sync_config(user_id)
         sync_key = get_sync_key(user_id)
         res_sync = supabase.table("config").select("valore")\
@@ -146,14 +197,15 @@ def check_daily_update(user_id, force=False):
             .eq("user_id", user_id)\
             .execute()
 
+        modificato = False
         if res.data:
             piano = res.data[0]["dati"]
-            if scarica_ingredienti(piano, user_id):
-                supabase.table("config")\
-                    .update({"valore": oggi_str})\
-                    .eq("chiave", sync_key)\
-                    .execute()
-                return True
+            modificato = scarica_ingredienti(piano, user_id)
+        supabase.table("config")\
+            .update({"valore": oggi_str})\
+            .eq("chiave", sync_key)\
+            .execute()
+        return modificato
     except Exception as e:
         print(f"Errore check_daily_update: {e}")
     return False
@@ -256,7 +308,7 @@ def modifica_scarico_ingredienti(ingredienti, azione, user_id):
 
 def undo_daily_update(user_id):
     """Annulla lo scarico di oggi restituendo le quantità al database."""
-    oggi_str = datetime.now().strftime("%Y-%m-%d")
+    oggi_str = local_now().strftime("%Y-%m-%d")
     try:
         ensure_sync_config(user_id)
         sync_key = get_sync_key(user_id)

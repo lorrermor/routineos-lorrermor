@@ -3,6 +3,8 @@ name: Daily inventory sync
 on:
   schedule:
     - cron: "15 3 * * *"
+    - cron: "15 4 * * *"
+    - cron: "15 5 * * *"
   workflow_dispatch:
 
 jobs:

@@ -328,6 +328,7 @@ async function initDashboard() {
         const statusRes = await apiFetch(`${API}/system/status-oggi`);
         const statusOggi = await statusRes.json();
         const giaAnnullato = statusOggi.scarico_annullato; // Vero o Falso
+        const scaricoInPausa = !!statusOggi.scarico_automatico_in_pausa;
 
         const infoRes = await apiFetch(`${API}/system/info`);
         const info = await infoRes.json();
@@ -362,7 +363,7 @@ async function initDashboard() {
             const pastiOggi = (pianoAttivo.pasti || []).filter(p => labelsOggi.has(normalizePlannerLabel(p.giorno)));
             
             // PASSIAMO IL VALORE giaAnnullato alla funzione render
-            renderMenuDashboard(pastiOggi, giaAnnullato);
+            renderMenuDashboard(pastiOggi, giaAnnullato, scaricoInPausa);
         } else {
             display.innerHTML = `<p class="empty-state">Nessun piano attivo per oggi (${oggiISO}).</p>`;
         }
@@ -490,7 +491,7 @@ function scaricoControlsHtml(ingredienti, label, options = {}) {
     `;
 }
 
-function renderMenuDashboard(pasti, giaAnnullato) {
+function renderMenuDashboard(pasti, giaAnnullato, scaricoInPausa = false) {
     const container = document.getElementById('active-menu-display');
     if (!pasti || !pasti.length) {
         container.innerHTML = "<p class='empty-state'>Nessun pasto programmato per oggi.</p>";
@@ -507,8 +508,12 @@ function renderMenuDashboard(pasti, giaAnnullato) {
                 ${!giaAnnullato ? 'disabled style="opacity:0.4; cursor:not-allowed; border-color:#444;"' : 'style="border-color: #f59e0b; color: #fbbf24;"'}>
                 Ripristina scarico
             </button>
+            <button class="btn outline" onclick="togglePausaScaricoAutomatico(${scaricoInPausa ? "false" : "true"})">
+                ${scaricoInPausa ? "Riattiva scarico automatico" : "Metti in pausa lo scarico automatico"}
+            </button>
             <span style="color:var(--dim); font-size:0.82rem; line-height:1.35; max-width:420px;">
-                Lo scarico delle scorte viene applicato automaticamente quando apri l'app e viene caricato il menu di oggi.
+                Lo scarico delle scorte viene applicato automaticamente ogni giorno, anche se non apri l'app.
+                ${scaricoInPausa ? " Al momento lo scarico automatico e in pausa." : ""}
             </span>
         </div>
     `;
@@ -2569,6 +2574,15 @@ function recordTaskStat({ tipo, nome, itemId, titolo, status, justification = ""
     saveStats(stats);
 }
 
+function removeTaskStat(tipo, nome, itemId, date = localISODate()) {
+    const stats = readStats();
+    const entry = stats[taskStatsId(tipo, nome, itemId)];
+    if (!entry?.history) return;
+    delete entry.history[date];
+    if (!Object.keys(entry.history).length) delete stats[taskStatsId(tipo, nome, itemId)];
+    saveStats(stats);
+}
+
 function statStatusLabel(status) {
     return {
         completed: "Completata",
@@ -2590,12 +2604,7 @@ function finalStatRecords(entries, month = "") {
     entries.forEach(entry => {
         Object.entries(entry.history || {}).forEach(([date, value]) => {
             if (month && !date.startsWith(month)) return;
-            const logicalKey = [
-                date,
-                normalizeName(entry.tipo),
-                normalizeName(entry.nome),
-                normalizeName(entry.titolo || entry.itemId)
-            ].join("::");
+            const logicalKey = [date, normalizeName(entry.titolo || entry.itemId)].join("::");
             const current = map.get(logicalKey);
             const currentTime = current?.updated_at || "";
             const nextTime = value.updated_at || "";
@@ -2730,9 +2739,10 @@ function deleteJustification(index) {
     renderJustifications();
 }
 
-function clearStats() {
+async function clearStats() {
     if (!confirm("Vuoi azzerare tutte le statistiche? Le giustificazioni preimpostate resteranno salvate.")) return;
-    localStorage.removeItem(statsKey());
+    localStorage.setItem(statsKey(), JSON.stringify({}));
+    await saveUserConfigValue("stats", {});
     renderStatsPage();
 }
 
@@ -2770,7 +2780,7 @@ function renderActivityCharts(records) {
     }
     const grouped = new Map();
     records.forEach(record => {
-        const key = [record.tipo, record.nome, record.titolo].map(normalizeName).join("::");
+        const key = normalizeName(record.titolo || record.itemId);
         if (!grouped.has(key)) grouped.set(key, { ...record, records: [] });
         grouped.get(key).records.push(record);
     });
@@ -2914,6 +2924,29 @@ async function caricaDettagliDaLista(endpoint, listResult) {
     return dettagli;
 }
 
+function routineFrequencyRank(value) {
+    return {
+        giornaliera: 0,
+        settimanale: 1,
+        mensile: 2,
+        annuale: 3,
+        personalizzata: 4
+    }[normalizeName(value || "giornaliera")] ?? 5;
+}
+
+function dashboardCompletedStorageKey() {
+    return `routineos_show_completed:${getStoredUserId()}:${localISODate()}`;
+}
+
+function dashboardShowsCompleted() {
+    return localStorage.getItem(dashboardCompletedStorageKey()) === "1";
+}
+
+function toggleDashboardCompleted() {
+    localStorage.setItem(dashboardCompletedStorageKey(), dashboardShowsCompleted() ? "0" : "1");
+    caricaRoutineDiOggi();
+}
+
 async function caricaRoutineDiOggi() {
     const container = document.getElementById("today-routines-display");
     if (!container) return;
@@ -2935,7 +2968,9 @@ async function caricaRoutineDiOggi() {
         const routine = await caricaDettagliDaLista("routine", routineList);
         const sottoroutine = await caricaDettagliDaLista("sottoroutine", sottoroutineList);
 
-        const routineDovute = routine.map(item => ({ ...item, tipo: "routine" })).filter(item => isRoutineDue(item));
+        const routineDovute = routine.map(item => ({ ...item, tipo: "routine" }))
+            .filter(item => isRoutineDue(item))
+            .sort((a, b) => routineFrequencyRank(a.frequenza) - routineFrequencyRank(b.frequenza));
         const sottoroutineDovute = sottoroutine.map(item => ({ ...item, tipo: "sottoroutine" })).filter(item => isRoutineDue(item));
         const linkedSubNames = new Set();
         const pending = loadPendingTasks();
@@ -2972,7 +3007,7 @@ async function caricaRoutineDiOggi() {
                         dueDate: oggi
                     };
                 }
-                const checked = isDaily && completati.has(key) ? "checked" : "";
+                const checked = completati.has(key) ? "checked" : "";
                 const orario = elemento.orario || "";
                 return {
                     key,
@@ -3028,7 +3063,7 @@ async function caricaRoutineDiOggi() {
                             dueDate: oggi
                         };
                     }
-                    const checked = isDaily && completati.has(key) ? "checked" : "";
+                    const checked = completati.has(key) ? "checked" : "";
                     return {
                         key,
                         tipo,
@@ -3074,7 +3109,7 @@ async function caricaRoutineDiOggi() {
                 orario: item.orario || "",
                 html: `
                     <div class="task-row stat-task-row">
-                        <input type="checkbox" onchange="toggleTask('${item.tipo}', '${safeEncoded(item.itemNome)}', '${safeEncoded(item.itemId)}', '${safeEncoded(item.titolo)}', this.checked)">
+                        <input type="checkbox" ${completati.has(item.key) ? "checked" : ""} onchange="toggleTask('${item.tipo}', '${safeEncoded(item.itemNome)}', '${safeEncoded(item.itemId)}', '${safeEncoded(item.titolo)}', this.checked)">
                         <span class="${item.subName ? "dashboard-linked-task" : ""}"${item.subName ? ` onclick="openSubroutineFromDashboard('${safeEncoded(item.subName)}')" role="link" title="Apri ${escapeHTML(item.subName)}"` : ""}>
                             <span class="task-title">${item.orario ? escapeHTML(item.orario) + " - " : ""}${escapeHTML(item.titolo)}</span>
                             ${item.subDetail ? `<span class="task-meta dashboard-sub-detail">${escapeHTML(item.subDetail)}</span>` : ""}
@@ -3089,6 +3124,8 @@ async function caricaRoutineDiOggi() {
 
         savePendingTasks(pending);
         const rows = [...rowsDovute, ...rowsPending];
+        const completedRows = rows.filter(row => row.completed);
+        const visibleRows = dashboardShowsCompleted() ? rows : rows.filter(row => !row.completed);
         window.todayStatsTasks = rows.map(row => ({
             tipo: row.tipo,
             nome: row.nome,
@@ -3124,9 +3161,12 @@ async function caricaRoutineDiOggi() {
             <section class="task-section">
                 <div class="dashboard-section-head">
                     <h3>Agenda</h3>
-                    <button class="btn outline day-justify-btn" onclick="justifyTodayTasks()">Giustifica giornata</button>
+                    <div class="dashboard-section-actions">
+                        ${completedRows.length ? `<button class="btn outline" onclick="toggleDashboardCompleted()">${dashboardShowsCompleted() ? "Nascondi completate" : `Mostra completate (${completedRows.length})`}</button>` : ""}
+                        <button class="btn outline day-justify-btn" onclick="justifyTodayTasks()">Giustifica giornata</button>
+                    </div>
                 </div>
-                <div class="task-list">${rows.map(row => row.html).join("")}</div>
+                <div class="task-list">${visibleRows.length ? visibleRows.map(row => row.html).join("") : `<p class="empty-state">Hai completato tutto quello che era visibile. Ottimo lavoro.</p>`}</div>
             </section>
         `;
     } catch (e) {
@@ -3187,15 +3227,7 @@ async function toggleTask(tipo, nomeEncoded, itemIdEncoded, titoloEncoded, compl
         savePendingTasks(pending);
         recordTaskStat({ tipo, nome, itemId, titolo, status: "completed" });
     } else {
-        const justification = askSkipJustification(titolo);
-        recordTaskStat({
-            tipo,
-            nome,
-            itemId,
-            titolo,
-            status: justification ? "justified" : "missed",
-            justification
-        });
+        removeTaskStat(tipo, nome, itemId);
     }
     await apiFetch(`${API}/completamenti/toggle`, {
         method: "POST",
@@ -3206,6 +3238,7 @@ async function toggleTask(tipo, nomeEncoded, itemIdEncoded, titoloEncoded, compl
             completato
         })
     });
+    caricaRoutineDiOggi();
 }
 
 async function initPlanner() {
@@ -3903,6 +3936,24 @@ async function rifaiScaricoOggi() {
         }
     } catch (e) { 
         console.error("Errore:", e); 
+    }
+}
+
+async function togglePausaScaricoAutomatico(paused) {
+    try {
+        const res = await apiFetch(API + "/system/auto-sync-pause", {
+            method: "POST",
+            body: JSON.stringify({ paused })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            alert(data.detail || "Impossibile aggiornare lo scarico automatico.");
+            return;
+        }
+        alert(data.message || "Impostazione aggiornata.");
+        await initDashboard();
+    } catch (e) {
+        alert("Errore di connessione durante l'aggiornamento dello scarico automatico.");
     }
 }
 
