@@ -1019,6 +1019,24 @@ function deleteDashboardComment(id) {
     saveDashboardComments(readStoredList(dashboardCommentsKey()).filter(item => item.id !== id));
 }
 
+function editDashboardComment(id) {
+    const comments = readStoredList(dashboardCommentsKey());
+    const comment = comments.find(item => item.id === id);
+    if (!comment) return;
+    const text = prompt("Modifica commento", comment.text || "");
+    if (text === null) return;
+    const cleanedText = text.trim();
+    if (!cleanedText) {
+        alert("Il commento non puo essere vuoto.");
+        return;
+    }
+    comment.text = cleanedText;
+    comment.updated_at = new Date().toISOString();
+    saveDashboardComments(comments);
+    const status = document.getElementById('dashboard-comments-status');
+    if (status) status.textContent = "Commento modificato.";
+}
+
 function moveDashboardListItem(type, fromIndex, toIndex) {
     const key = type === "note" ? dashboardNotesKey() : dashboardCommentsKey();
     const items = readStoredList(key);
@@ -1063,6 +1081,7 @@ function renderDashboardComments(comments) {
                 <span class="dashboard-card-buttons">
                     <button class="btn outline" ${index === 0 ? "disabled" : ""} onclick="moveDashboardListItem('comment', ${index}, ${index - 1})">Su</button>
                     <button class="btn outline" ${index === comments.length - 1 ? "disabled" : ""} onclick="moveDashboardListItem('comment', ${index}, ${index + 1})">Giu</button>
+                    <button class="btn outline" onclick="editDashboardComment('${item.id}')">Modifica</button>
                     <button class="btn danger" onclick="deleteDashboardComment('${item.id}')">Elimina</button>
                 </span>
             </div>
@@ -1099,6 +1118,28 @@ function deleteDashboardNote(id) {
     saveDashboardNotes(readStoredList(dashboardNotesKey()).filter(item => item.id !== id));
 }
 
+function editDashboardNote(id) {
+    const notes = readStoredList(dashboardNotesKey());
+    const note = notes.find(item => item.id === id);
+    if (!note) return;
+    const title = prompt("Modifica titolo della nota", note.title || "");
+    if (title === null) return;
+    const body = prompt("Modifica testo della nota", note.body || "");
+    if (body === null) return;
+    const cleanedTitle = title.trim();
+    const cleanedBody = body.trim();
+    if (!cleanedTitle && !cleanedBody) {
+        alert("La nota deve contenere un titolo o un testo.");
+        return;
+    }
+    note.title = cleanedTitle || "Nota senza titolo";
+    note.body = cleanedBody;
+    note.updated_at = new Date().toISOString();
+    saveDashboardNotes(notes);
+    const status = document.getElementById('dashboard-notes-status');
+    if (status) status.textContent = "Nota modificata.";
+}
+
 function renderDashboardNotes(notes) {
     const list = document.getElementById('dashboard-notes-list');
     if (!list) return;
@@ -1118,6 +1159,7 @@ function renderDashboardNotes(notes) {
                 <span class="dashboard-card-buttons">
                     <button class="btn outline" ${index === 0 ? "disabled" : ""} onclick="moveDashboardListItem('note', ${index}, ${index - 1})">Su</button>
                     <button class="btn outline" ${index === notes.length - 1 ? "disabled" : ""} onclick="moveDashboardListItem('note', ${index}, ${index + 1})">Giu</button>
+                    <button class="btn outline" onclick="editDashboardNote('${item.id}')">Modifica</button>
                     <button class="btn danger" onclick="deleteDashboardNote('${item.id}')">Elimina</button>
                 </span>
             </div>
