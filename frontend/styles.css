@@ -710,6 +710,8 @@ td { padding: 12px; border-bottom: 1px solid #334155; }
 
 .stat-metric {
   margin-bottom: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .stat-metric span {
@@ -722,7 +724,9 @@ td { padding: 12px; border-bottom: 1px solid #334155; }
 .stat-metric strong {
   display: block;
   font-size: 2rem;
+  max-width: 100%;
   margin-top: 8px;
+  overflow-wrap: anywhere;
 }
 
 .stats-section-head {
@@ -1204,6 +1208,27 @@ td { padding: 12px; border-bottom: 1px solid #334155; }
     width: 100%;
     justify-content: center;
     padding: 10px 12px;
+  }
+
+  .stats-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .stats-summary-grid .stat-metric {
+    padding: 13px 11px;
+  }
+
+  .stat-metric span {
+    display: block;
+    font-size: 0.68rem;
+    letter-spacing: 0.04em;
+    overflow-wrap: anywhere;
+  }
+
+  .stat-metric strong {
+    font-size: 1.55rem;
+    line-height: 1.05;
   }
 
   .side-menu {
