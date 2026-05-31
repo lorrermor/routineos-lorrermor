@@ -864,8 +864,7 @@ function findLinkedSubroutinesForDashboard(item, title, sottoroutineDovute, used
         return (
             (subParentKey === parentKey && subNameKey === titleKey) ||
             subNameKey === titleKey ||
-            subParentKey === titleKey ||
-            subParentKey === parentKey
+            subParentKey === titleKey
         );
     });
 
@@ -2565,6 +2564,18 @@ function savePendingTasks(pending) {
     saveLocalAndRemote(pendingTasksKey(), "pending_tasks", pending);
 }
 
+function removeEmbeddedSubroutinePendingAliases(pending, linkedSubNames) {
+    Object.keys(pending).forEach(key => {
+        const item = pending[key];
+        if (
+            item?.tipo === "sottoroutine" &&
+            linkedSubNames.has(normalizeName(item.itemNome))
+        ) {
+            delete pending[key];
+        }
+    });
+}
+
 function statsKey() {
     return `pantrypro_stats:${getStoredUserId()}`;
 }
@@ -3377,6 +3388,7 @@ async function caricaRoutineDiOggi() {
 
         const rowsDovute = [...rowsRoutine, ...rowsSubStandalone];
 
+        removeEmbeddedSubroutinePendingAliases(pending, linkedSubNames);
         for (const key of Array.from(completati)) {
             delete pending[key];
         }
