@@ -805,6 +805,7 @@ td { padding: 12px; border-bottom: 1px solid #334155; }
 }
 
 .calendar-day {
+  min-width: 0;
   min-height: 68px;
   border: 1px solid #334155;
   border-radius: 10px;
@@ -816,6 +817,7 @@ td { padding: 12px; border-bottom: 1px solid #334155; }
   color: inherit;
   cursor: pointer;
   text-align: left;
+  overflow: hidden;
 }
 
 .calendar-day span {
@@ -824,6 +826,22 @@ td { padding: 12px; border-bottom: 1px solid #334155; }
   min-width: 0;
   max-width: 100%;
   white-space: nowrap;
+  overflow: hidden;
+}
+
+.calendar-counts {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2px;
+  text-align: center;
+}
+
+.calendar-counts small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  font-size: inherit;
 }
 
 .calendar-day:disabled {
@@ -1735,12 +1753,12 @@ datalist option {
 
   .calendar-day {
     min-height: 54px;
-    padding: 5px;
+    padding: 4px 2px;
     border-radius: 7px;
   }
 
   .calendar-day span {
-    font-size: 0.64rem;
+    font-size: 0.58rem;
   }
 }
 

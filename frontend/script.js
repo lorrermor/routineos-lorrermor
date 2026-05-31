@@ -55,6 +55,7 @@ function getStoredUserId() {
 }
 
 let refreshSessionPromise = null;
+let authRedirectInProgress = false;
 
 function clearAuthSession() {
     ["pantrypro_token", "pantrypro_refresh", "pantrypro_user_id", "pantrypro_email"].forEach(key => {
@@ -88,21 +89,26 @@ async function refreshSession() {
 async function refreshSessionOnce() {
     const refreshToken = getRefreshToken();
     if (!refreshToken) return false;
-    try {
-        const res = await fetch(`${API}/auth/refresh`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ refresh_token: refreshToken })
-        });
-        if (!res.ok) return false;
-        const data = await res.json();
-        const remember = localStorage.getItem("pantrypro_remember_me") !== "0";
-        setAuthSession(data, remember);
-        return true;
-    } catch (e) {
-        console.warn("Refresh sessione non riuscito:", e);
-        return false;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+            const res = await fetch(`${API}/auth/refresh`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ refresh_token: refreshToken })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                const remember = localStorage.getItem("pantrypro_remember_me") !== "0";
+                setAuthSession(data, remember);
+                return true;
+            }
+            if (res.status < 500) return false;
+        } catch (e) {
+            console.warn("Refresh sessione non riuscito:", e);
+        }
+        await new Promise(resolve => setTimeout(resolve, 450));
     }
+    return false;
 }
 
 async function ensureFreshSession() {
@@ -114,8 +120,8 @@ async function ensureFreshSession() {
     return refreshSession();
 }
 
-async function apiFetch(url, options = {}, retry = true) {
-    if (retry) await ensureFreshSession();
+async function apiFetch(url, options = {}, retriesLeft = 2) {
+    if (retriesLeft > 0) await ensureFreshSession();
     const headers = new Headers(options.headers || {});
     const token = getAuthToken();
 
@@ -126,14 +132,17 @@ async function apiFetch(url, options = {}, retry = true) {
 
     const res = await fetch(url, { ...options, headers });
     if (res.status === 401) {
-        if (retry && token && getAuthToken() && getAuthToken() !== token) {
-            return apiFetch(url, options, false);
+        if (retriesLeft > 0 && token && getAuthToken() && getAuthToken() !== token) {
+            return apiFetch(url, options, retriesLeft - 1);
         }
-        if (retry && await refreshSession()) {
-            return apiFetch(url, options, false);
+        if (retriesLeft > 0 && await refreshSession()) {
+            return apiFetch(url, options, retriesLeft - 1);
         }
-        clearAuthSession();
-        window.location.href = "login.html";
+        if (!authRedirectInProgress) {
+            authRedirectInProgress = true;
+            clearAuthSession();
+            window.location.href = "login.html";
+        }
     }
     return res;
 }
@@ -239,6 +248,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (document.getElementById('log-container') && !document.getElementById('active-menu-display')) {
         caricaCronologia();
+    }
+
+    if (document.getElementById('stats-calendar')) {
+        initStatsFrequencyMetadata();
     }
 });
 
@@ -513,7 +526,7 @@ function renderMenuDashboard(pasti, giaAnnullato, scaricoInPausa = false) {
             </button>
             <span style="color:var(--dim); font-size:0.82rem; line-height:1.35; max-width:420px;">
                 Lo scarico delle scorte viene applicato automaticamente ogni giorno, anche se non apri l'app.
-                ${scaricoInPausa ? " Al momento lo scarico automatico e in pausa." : ""}
+                ${scaricoInPausa ? " Al momento lo scarico automatico è in pausa." : ""}
             </span>
         </div>
     `;
@@ -2549,7 +2562,7 @@ function taskStatsId(tipo, nome, itemId) {
     return `${tipo}:${nome}:${itemId}`;
 }
 
-function recordTaskStat({ tipo, nome, itemId, titolo, status, justification = "", date = localISODate() }) {
+function recordTaskStat({ tipo, nome, itemId, titolo, frequenza = "", status, justification = "", date = localISODate() }) {
     const stats = readStats();
     const key = taskStatsId(tipo, nome, itemId);
     if (!stats[key]) {
@@ -2566,6 +2579,7 @@ function recordTaskStat({ tipo, nome, itemId, titolo, status, justification = ""
     stats[key].nome = nome;
     stats[key].itemId = itemId;
     stats[key].titolo = titolo || stats[key].titolo || itemId;
+    stats[key].frequenza = frequenza || stats[key].frequenza || "";
     stats[key].history[date] = {
         status,
         justification,
@@ -2615,6 +2629,7 @@ function finalStatRecords(entries, month = "") {
                     nome: entry.nome,
                     itemId: entry.itemId,
                     titolo: entry.titolo || entry.itemId,
+                    frequenza: entry.frequenza || "",
                     status: value.status,
                     justification: value.justification || "",
                     updated_at: nextTime
@@ -2632,6 +2647,42 @@ function countStatRecords(records) {
     }, { completed: 0, justified: 0, missed: 0 });
 }
 
+window.statsFrequencyByName = window.statsFrequencyByName || {};
+
+function statFrequency(record) {
+    return record.frequenza
+        || window.statsFrequencyByName[normalizeName(record.nome)]
+        || (record.tipo === "menu" ? "giornaliera" : "personalizzata");
+}
+
+function compareStatsByFrequency(a, b) {
+    return routineFrequencyRank(statFrequency(a)) - routineFrequencyRank(statFrequency(b))
+        || (a.titolo || a.itemId || "").localeCompare(b.titolo || b.itemId || "");
+}
+
+async function initStatsFrequencyMetadata() {
+    try {
+        const [routineListRes, sottoroutineListRes] = await Promise.all([
+            apiFetch(`${API}/routine/list`),
+            apiFetch(`${API}/sottoroutine/list`)
+        ]);
+        const [routineList, sottoroutineList] = await Promise.all([
+            jsonOrThrow(routineListRes, "routine/list"),
+            jsonOrThrow(sottoroutineListRes, "sottoroutine/list")
+        ]);
+        const [routine, sottoroutine] = await Promise.all([
+            caricaDettagliDaLista("routine", routineList),
+            caricaDettagliDaLista("sottoroutine", sottoroutineList)
+        ]);
+        [...routine, ...sottoroutine].forEach(item => {
+            window.statsFrequencyByName[normalizeName(item.nome)] = item.frequenza || "personalizzata";
+        });
+        renderStatsPage();
+    } catch (e) {
+        console.warn("Frequenze statistiche non caricate:", e);
+    }
+}
+
 function askSkipJustification(taskLabel) {
     const options = readJustifications();
     const answer = prompt(
@@ -2640,16 +2691,18 @@ function askSkipJustification(taskLabel) {
     return (answer || "").trim();
 }
 
-function skipTask(tipo, nomeEncoded, itemIdEncoded, titoloEncoded) {
+function skipTask(tipo, nomeEncoded, itemIdEncoded, titoloEncoded, frequenzaEncoded = "") {
     const nome = decodeURIComponent(nomeEncoded);
     const itemId = decodeURIComponent(itemIdEncoded);
     const titolo = decodeURIComponent(titoloEncoded || itemIdEncoded);
+    const frequenza = decodeURIComponent(frequenzaEncoded || "");
     const justification = askSkipJustification(titolo);
     recordTaskStat({
         tipo,
         nome,
         itemId,
         titolo,
+        frequenza,
         status: justification ? "justified" : "missed",
         justification
     });
@@ -2682,6 +2735,7 @@ async function justifyTodayTasks() {
             nome: task.nome,
             itemId: task.itemId,
             titolo: task.titolo,
+            frequenza: task.frequenza,
             status,
             justification
         });
@@ -2786,7 +2840,7 @@ function renderActivityCharts(records) {
     });
 
     container.innerHTML = [...grouped.values()]
-        .sort((a, b) => (a.titolo || a.itemId).localeCompare(b.titolo || b.itemId))
+        .sort(compareStatsByFrequency)
         .map(entry => {
             const counts = countStatRecords(entry.records);
             const total = Math.max(1, counts.completed + counts.justified + counts.missed);
@@ -2842,7 +2896,7 @@ function renderStatsCalendar(entries) {
         return `
             <button class="calendar-day ${cls}" title="${title}" type="button" onclick="showStatsDayDetail('${date}')" ${data ? "" : "disabled"}>
                 <strong>${day}</strong>
-                ${data ? `<span>${data.completed || 0}/${data.justified || 0}/${data.missed || 0}</span>` : "<span>-</span>"}
+                ${data ? `<span class="calendar-counts"><small>${data.completed || 0}</small><small>${data.justified || 0}</small><small>${data.missed || 0}</small></span>` : "<span>-</span>"}
             </button>
         `;
     }).join("");
@@ -2861,7 +2915,7 @@ function showStatsDayDetail(date) {
     });
     const records = [...data.records].sort((a, b) => {
         const order = { completed: 0, justified: 1, missed: 2 };
-        return (order[a.status] ?? 9) - (order[b.status] ?? 9) || (a.titolo || "").localeCompare(b.titolo || "");
+        return compareStatsByFrequency(a, b) || (order[a.status] ?? 9) - (order[b.status] ?? 9);
     });
     detail.innerHTML = `
         <div class="stats-day-card">
@@ -3015,12 +3069,13 @@ async function caricaRoutineDiOggi() {
                     nome: item.nome,
                     itemId,
                     titolo: title,
+                    frequenza: item.frequenza || "",
                     completed: completati.has(key),
                     isDaily,
                     orario,
                     html: `
                     <div class="task-row stat-task-row">
-                        <input type="checkbox" ${checked} onchange="toggleTask('${tipo}', '${safeEncoded(item.nome)}', '${safeEncoded(itemId)}', '${safeEncoded(title)}', this.checked)">
+                        <input type="checkbox" ${checked} onchange="toggleTask('${tipo}', '${safeEncoded(item.nome)}', '${safeEncoded(itemId)}', '${safeEncoded(title)}', this.checked, '${safeEncoded(item.frequenza || "")}')">
                         <span class="${linkedSubName ? "dashboard-linked-task" : ""}"${openSub}>
                             <span class="task-title">${orario ? escapeHTML(orario) + " - " : ""}${escapeHTML(title)}</span>
                             ${linkedDetail ? `<span class="task-meta dashboard-sub-detail">${escapeHTML(linkedDetail)}</span>` : ""}
@@ -3028,7 +3083,7 @@ async function caricaRoutineDiOggi() {
                             ${linkedSubName ? `<span class="task-meta dashboard-open-hint">Apri dettagli</span>` : ""}
                             ${elemento.note ? `<span class="task-meta">${escapeHTML(elemento.note)}</span>` : ""}
                         </span>
-                        <button class="btn outline stat-skip-btn" onclick="skipTask('${tipo}', '${safeEncoded(item.nome)}', '${safeEncoded(itemId)}', '${safeEncoded(title)}')">Giustifica</button>
+                        <button class="btn outline stat-skip-btn" onclick="skipTask('${tipo}', '${safeEncoded(item.nome)}', '${safeEncoded(itemId)}', '${safeEncoded(title)}', '${safeEncoded(item.frequenza || "")}')">Giustifica</button>
                     </div>
                 `};
             });
@@ -3070,12 +3125,13 @@ async function caricaRoutineDiOggi() {
                         nome: item.nome,
                         itemId,
                         titolo: title,
+                        frequenza: item.frequenza || "",
                         completed: completati.has(key),
                         isDaily,
                         orario,
                         html: `
                     <div class="task-row stat-task-row">
-                        <input type="checkbox" ${checked} onchange="toggleTask('${tipo}', '${safeEncoded(item.nome)}', '${safeEncoded(itemId)}', '${safeEncoded(title)}', this.checked)">
+                        <input type="checkbox" ${checked} onchange="toggleTask('${tipo}', '${safeEncoded(item.nome)}', '${safeEncoded(itemId)}', '${safeEncoded(title)}', this.checked, '${safeEncoded(item.frequenza || "")}')">
                         <span class="dashboard-linked-task" onclick="openSubroutineFromDashboard('${safeEncoded(item.nome)}')" role="link" title="Apri ${escapeHTML(item.nome)}">
                             <span class="task-title">${orario ? escapeHTML(orario) + " - " : ""}${escapeHTML(title)}</span>
                             ${detail && detail !== title ? `<span class="task-meta dashboard-sub-detail">${escapeHTML(detail)}</span>` : ""}
@@ -3083,7 +3139,7 @@ async function caricaRoutineDiOggi() {
                             <span class="task-meta dashboard-open-hint">Apri dettagli</span>
                             ${elemento.note ? `<span class="task-meta">${escapeHTML(elemento.note)}</span>` : ""}
                         </span>
-                        <button class="btn outline stat-skip-btn" onclick="skipTask('${tipo}', '${safeEncoded(item.nome)}', '${safeEncoded(itemId)}', '${safeEncoded(title)}')">Giustifica</button>
+                        <button class="btn outline stat-skip-btn" onclick="skipTask('${tipo}', '${safeEncoded(item.nome)}', '${safeEncoded(itemId)}', '${safeEncoded(title)}', '${safeEncoded(item.frequenza || "")}')">Giustifica</button>
                     </div>
                 `};
                 });
@@ -3104,12 +3160,13 @@ async function caricaRoutineDiOggi() {
                 nome: item.itemNome,
                 itemId: item.itemId,
                 titolo: item.titolo,
+                frequenza: item.frequenza || "",
                 completed: completati.has(item.key),
                 isDaily: false,
                 orario: item.orario || "",
                 html: `
                     <div class="task-row stat-task-row">
-                        <input type="checkbox" ${completati.has(item.key) ? "checked" : ""} onchange="toggleTask('${item.tipo}', '${safeEncoded(item.itemNome)}', '${safeEncoded(item.itemId)}', '${safeEncoded(item.titolo)}', this.checked)">
+                        <input type="checkbox" ${completati.has(item.key) ? "checked" : ""} onchange="toggleTask('${item.tipo}', '${safeEncoded(item.itemNome)}', '${safeEncoded(item.itemId)}', '${safeEncoded(item.titolo)}', this.checked, '${safeEncoded(item.frequenza || "")}')">
                         <span class="${item.subName ? "dashboard-linked-task" : ""}"${item.subName ? ` onclick="openSubroutineFromDashboard('${safeEncoded(item.subName)}')" role="link" title="Apri ${escapeHTML(item.subName)}"` : ""}>
                             <span class="task-title">${item.orario ? escapeHTML(item.orario) + " - " : ""}${escapeHTML(item.titolo)}</span>
                             ${item.subDetail ? `<span class="task-meta dashboard-sub-detail">${escapeHTML(item.subDetail)}</span>` : ""}
@@ -3117,7 +3174,7 @@ async function caricaRoutineDiOggi() {
                             ${item.subName ? `<span class="task-meta dashboard-open-hint">Apri dettagli</span>` : ""}
                             ${item.note ? `<span class="task-meta">${escapeHTML(item.note)}</span>` : ""}
                         </span>
-                        <button class="btn outline stat-skip-btn" onclick="skipTask('${item.tipo}', '${safeEncoded(item.itemNome)}', '${safeEncoded(item.itemId)}', '${safeEncoded(item.titolo)}')">Giustifica</button>
+                        <button class="btn outline stat-skip-btn" onclick="skipTask('${item.tipo}', '${safeEncoded(item.itemNome)}', '${safeEncoded(item.itemId)}', '${safeEncoded(item.titolo)}', '${safeEncoded(item.frequenza || "")}')">Giustifica</button>
                     </div>
                 `
             }));
@@ -3131,6 +3188,7 @@ async function caricaRoutineDiOggi() {
             nome: row.nome,
             itemId: row.itemId,
             titolo: row.titolo,
+            frequenza: row.frequenza,
             completed: row.completed
         })).filter(item => item.tipo && item.nome && item.itemId && !item.completed);
 
@@ -3217,15 +3275,16 @@ async function getMenuComeRoutine() {
     return [];
 }
 
-async function toggleTask(tipo, nomeEncoded, itemIdEncoded, titoloEncoded, completato) {
+async function toggleTask(tipo, nomeEncoded, itemIdEncoded, titoloEncoded, completato, frequenzaEncoded = "") {
     const nome = decodeURIComponent(nomeEncoded);
     const itemId = decodeURIComponent(itemIdEncoded);
     const titolo = decodeURIComponent(titoloEncoded || itemIdEncoded);
+    const frequenza = decodeURIComponent(frequenzaEncoded || "");
     if (completato) {
         const pending = loadPendingTasks();
         delete pending[`${tipo}:${nome}:${itemId}`];
         savePendingTasks(pending);
-        recordTaskStat({ tipo, nome, itemId, titolo, status: "completed" });
+        recordTaskStat({ tipo, nome, itemId, titolo, frequenza, status: "completed" });
     } else {
         removeTaskStat(tipo, nome, itemId);
     }
